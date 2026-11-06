@@ -13,10 +13,13 @@ namespace CandyCruisers.Editor
             using var settings = new MetronomeCheckSettings();
             PlayerPrefs.DeleteKey(MetronomeSettings.VoiceKey);
             PlayerPrefs.DeleteKey(MetronomeSettings.VisualKey);
+            PlayerPrefs.DeleteKey(MetronomeSettings.RoundClockKey);
             Check(!MetronomeSettings.VoiceEnabled && !MetronomeSettings.VisualEnabled, "Both metronomes default off");
+            Check(!MetronomeSettings.RoundClockEnabled, "The round clock defaults off");
             Check(!GameplayMusicPlayer.DefaultSoundtrackNames.Contains(GameplayMusicPlayer.CountingResourceName),
                 "The spoken metronome is not a regular soundtrack entry");
             CheckLayout();
+            CheckRoundClock();
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
                 var session = grid.gameObject.AddComponent<GameSession>();
@@ -58,6 +61,10 @@ namespace CandyCruisers.Editor
                     Check(session.MetronomeMenuOpen && session.IsPaused, "Outside taps cannot resume behind the options panel");
                     Check(session.HandleMenuKey(KeyCode.Return) && session.IsPaused, "Enter cannot resume behind options");
                     Activate(session, GameSession.MetronomeMenuRowRect(panel, 2).center, screen, safe, mobile);
+                    Check(MetronomeSettings.RoundClockEnabled && PlayerPrefs.GetInt(MetronomeSettings.RoundClockKey) == 1 &&
+                        MetronomeSettings.VisualEnabled && MetronomeSettings.VoiceEnabled,
+                        "The saved round clock switch leaves both metronomes enabled");
+                    Activate(session, GameSession.MetronomeMenuRowRect(panel, 3).center, screen, safe, mobile);
                     Check(!session.MetronomeMenuOpen && session.IsPaused, "Back returns to the pause menu");
                     session.Resume();
                     Check(music.Source.clip.name == GameplayMusicPlayer.CountingResourceName && music.Source.loop &&
@@ -74,6 +81,8 @@ namespace CandyCruisers.Editor
                         "Escape closes options without also resuming");
                     Check(session.HandleMenuKey(KeyCode.F10) && !MetronomeSettings.VisualEnabled && session.IsPaused,
                         "The visual shortcut works while paused");
+                    Check(session.HandleMenuKey(KeyCode.F7) && !MetronomeSettings.RoundClockEnabled && session.IsPaused,
+                        "The clock shortcut works independently while paused");
                     Check(session.HandleMenuKey(KeyCode.F9) && MetronomeSettings.VoiceEnabled && session.IsPaused &&
                         session.HandleMenuKey(KeyCode.F9) && !MetronomeSettings.VoiceEnabled,
                         "The voice shortcut works while paused");
@@ -93,7 +102,67 @@ namespace CandyCruisers.Editor
                     UnityEngine.Object.DestroyImmediate(session);
                 }
             });
-            Debug.Log("Metronome options checks passed: regular-only shuffle, independent saved switches, pause-only menu and shortcuts, voice loop, regular music restoration and safe-area layouts.");
+            Debug.Log("Metronome options checks passed: regular-only shuffle, independent saved switches, round clock timing, pause-only menu and shortcuts, voice loop, regular music restoration and safe-area layouts.");
+        }
+
+        private static void CheckRoundClock()
+        {
+            Check(GameSession.FormatRoundTime(0) == "00:00" && GameSession.FormatRoundTime(-1) == "00:00" &&
+                GameSession.FormatRoundTime(59.99) == "00:59" && GameSession.FormatRoundTime(60) == "01:00" &&
+                GameSession.FormatRoundTime(3599.99) == "59:59" && GameSession.FormatRoundTime(3600) == "60:00" &&
+                GameSession.FormatRoundTime(6000) == "100:00", "Clock uses whole minutes and seconds without wrapping at one hour");
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var session = grid.gameObject.AddComponent<GameSession>();
+                session.Configure(player); session.PresentationPreview = true;
+                session.LevelCatalog = null;
+                if (!Application.isPlaying) Invoke(session, "OnEnable");
+                Invoke(session, "Start");
+                try
+                {
+                    session.Tick(2);
+                    Check(session.ElapsedRoundSeconds == 0 && !session.RoundClockVisible && !session.HandleMenuKey(KeyCode.F7),
+                        "Menu time and shortcuts cannot start the round clock");
+                    session.StartRun();
+                    Check(session.State == GameSession.RunState.Refilling && session.RoundClockText == "00:00",
+                        "A new round starts at zero during its opening refill");
+                    session.Tick(.5f);
+                    session.Tick(.75f);
+                    Check(session.ElapsedRoundSeconds == 1.25 && session.RoundClockText == "00:01" && !session.RoundClockVisible,
+                        "Refill and play accumulate fractional seconds while the display is off");
+                    session.Tick(-2); session.Tick(0);
+                    Check(session.ElapsedRoundSeconds == 1.25, "Zero or negative ticks cannot change elapsed time");
+                    session.Pause();
+                    session.Tick(90);
+                    Check(session.HandleMenuKey(KeyCode.F7) && MetronomeSettings.RoundClockEnabled &&
+                        !MetronomeSettings.VisualEnabled && !session.RoundClockVisible && session.ElapsedRoundSeconds == 1.25,
+                        "Pause freezes the clock and allows enabling its display independently");
+                    session.Resume();
+                    Check(session.RoundClockVisible && !session.HandleMenuKey(KeyCode.F7),
+                        "Resume shows accumulated time and protects the clock from gameplay shortcuts");
+                    session.Tick(.75f);
+                    Check(session.RoundClockText == "00:02", "Resume preserves fractional progress");
+                    var state = typeof(GameSession).GetProperty(nameof(GameSession.State));
+                    foreach (var stopped in new[] { GameSession.RunState.Dying, GameSession.RunState.GameOver })
+                    {
+                        state.SetValue(session, stopped);
+                        session.Tick(.01f);
+                        Check(session.ElapsedRoundSeconds == 2 && !session.RoundClockVisible,
+                            "Fatal defeat and game-over presentation stop and hide the clock");
+                    }
+                    state.SetValue(session, GameSession.RunState.MainMenu);
+                    session.StartRun();
+                    Check(session.RoundClockText == "00:00" && session.RoundClockVisible && MetronomeSettings.RoundClockEnabled,
+                        "Starting another round resets elapsed time while retaining clock visibility");
+                }
+                finally
+                {
+                    if (session.IsPaused) session.Resume();
+                    if (!Application.isPlaying) Invoke(session, "OnDisable");
+                    UnityEngine.Object.DestroyImmediate(session);
+                    MetronomeSettings.RoundClockEnabled = false;
+                }
+            });
         }
 
         private static void CheckLayout()
@@ -109,12 +178,39 @@ namespace CandyCruisers.Editor
                 var panel = GameSession.MetronomeMenuRect(screen, safe, scale, mobile);
                 Check(bounds.Contains(entry.min) && bounds.Contains(entry.max) && bounds.Contains(panel.min) && bounds.Contains(panel.max),
                     "Menu entry and options panel remain within desktop and phone safe areas");
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     var row = GameSession.MetronomeMenuRowRect(panel, i);
                     Check(row.height > 0 && panel.Contains(row.min) && panel.Contains(row.max) &&
                         (i == 0 || row.yMin > GameSession.MetronomeMenuRowRect(panel, i - 1).yMax),
                         "Each metronome switch has a distinct touch target inside the panel");
+                }
+                foreach (bool beatVisible in new[] { false, true })
+                {
+                    var clock = GameSession.RoundClockRect(screen, safe, scale, beatVisible);
+                    var beat = GameSession.DevelopmentMetronomeRect(screen, safe, scale, beatVisible);
+                    Check(bounds.Contains(clock.min) && bounds.Contains(clock.max) &&
+                        (!beatVisible || !clock.Overlaps(beat)),
+                        "The round clock fits the safe area without overlapping the enabled beat counter");
+                }
+                Rect field = screen.y > screen.x * 1.4f ?
+                    new Rect(0, screen.y * .14f, screen.x, screen.y * .8f) :
+                    new Rect(screen.x * .25f, screen.y * .02f, screen.x * .5f, screen.y * .96f);
+                foreach (bool clockVisible in new[] { false, true })
+                foreach (bool beatVisible in new[] { false, true })
+                {
+                    var overlays = DevelopmentOverlayLayout.Calculate(screen, safe, scale, field, clockVisible, beatVisible);
+                    var blocked = new Rect(field.x / scale, (screen.y - field.yMax) / scale, field.width / scale, field.height / scale);
+                    foreach (var rect in new[] { clockVisible ? overlays.Clock : default, beatVisible ? overlays.Metronome : default })
+                    {
+                        if (rect == default) continue;
+                        Check(rect.width > 0 && rect.height > 0 && bounds.Contains(rect.min) && bounds.Contains(rect.max) &&
+                            !rect.Overlaps(blocked), "Development readouts fit unused safe-area gutters outside all playfield artwork: " + screen);
+                    }
+                    Check(!clockVisible || overlays.Clock.width > 0, "Enabled clock has a visible gutter slot");
+                    Check(!beatVisible || overlays.Metronome.width > 0, "Enabled metronome has a visible gutter slot");
+                    Check(!clockVisible || !beatVisible || !overlays.Clock.Overlaps(overlays.Metronome),
+                        "Development readouts remain separate in narrow, portrait and landscape gutters");
                 }
             }
         }

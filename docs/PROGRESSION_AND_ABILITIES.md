@@ -155,12 +155,17 @@ such as `300 + 100 x4 = +700`, without multiplying earlier hits again.
 Clearing the fleet adds `10000 * level`, without a digit or combo multiplier.
 Both use the level before that clear.
 
-Each level in `Assets/Resources/LevelMap.json` sets `enemiesToDefeat`, the additional defeats needed
-to earn the next level. Targets accumulate across the run, and advancement
-waits for the current fleet to clear. The starter targets are 20, 40, 60, and
-so on; a large clear can cross multiple targets without losing progression.
-Without a catalog, the legacy cumulative threshold is
-`10 * level * (level + 1)`. See [Level Progression](LEVEL_PROGRESSION.md).
+Each level in `Assets/Resources/LevelMap.json` supplies an ordered `fleets`
+list. Clear every enemy from each fleet, including incoming lines and summons,
+to move to the next entry. The final full clear advances exactly one level.
+The progress bar counts completed fleets; defeat counts and score multipliers
+cannot skip entries. See [Level Progression](LEVEL_PROGRESSION.md).
+
+Procedural development fixtures without a catalog retain the legacy cumulative
+threshold `10 * level * (level + 1)` and the following default sizes and unlocks.
+Authored fleets use their own candidate pools and row layouts. Incoming lines
+and summons stay within each fleet's resolved opening palette, and each new fleet
+starts its own incoming-line sequence at zero.
 
 | Level | Eligible Types | Refill Size |
 | --- | --- | --- |
@@ -263,12 +268,14 @@ remaining visual transition finishes as a disguise rather than a conversion.
 
 ## Green: Count-Based Movement
 
-Default movement is `0.03 * liveGreenCount * levelSpeedMultiplier` world units
-per second. There is no movement with zero Greens, including the Red/Blue-only
+Default average movement is `0.015 * liveGreenCount * levelSpeedMultiplier`
+world units per second at a constant tempo. There is no movement with zero Greens, including the Red/Blue-only
 opening. Counts are read from the live grid, including Yellow conversions.
-Movement is spent only on song beats: tick cadence stays on beat, while each
-tick length is the current speed multiplied by the current beat duration. If a
-long frame crosses multiple beats, later beat ticks use any updated Green count.
+Movement is spent only on song counts two and four. Each tick retains the
+original single-beat distance, using the configured `0.03 * liveGreenCount *
+levelSpeedMultiplier` rate multiplied by the completed beat duration. Skipping
+counts one and three halves average travel. If a long frame crosses multiple
+beats, later movement ticks use any updated Green count.
 
 Tier-two Greens add the retained fast-forward dash: individual 0.1-unit bursts
 over 0.18 seconds, preceded by a 0.6-second flashing warning and fleet-wide
@@ -311,7 +318,7 @@ countdowns finish normally; new rolls use the current level. This replaces the
 older, stronger Purple/Yellow cooldown scaling.
 
 Fleet base speed increases by 3% of its initial value per level, capped at twice
-the initial speed. With the default 0.03 units/second per Green, level 6 moves at 0.0345 per Green.
+the initial speed. With the default average 0.015 units/second per Green, level 6 moves at 0.01725 per Green.
 Green's 0.1-unit burst remains separate and does not grow with level.
 `CombatBalance` centralizes these tuning values. Basic and special abilities
 have separate tuning entries, selected from the enemy's actual tier whenever
@@ -324,11 +331,46 @@ replace their basic counterparts rather than running a second simultaneous cast.
 Clearing the last enemy of a color grants one magic charge, capped at two.
 Partial clears, repeated hits, conversion, and disabling enemies do not award
 charges. A color that later returns can earn another charge when cleared again.
-The player flashes through all five colors when magic is ready or a magic shot
-is active, changing color every 0.1 seconds. The level-progress fill uses the
-same displayed player color; the display also shows the stored charge count.
-The arcade-style playfield frame also follows that displayed color, including
-magic flashing, without changing the logical wrap or fleet-turn boundaries.
+The powered player cycles through all six palette colors, advancing four color
+steps per music beat (or ten steps per second outside gameplay or without a music component).
+Score, level and combo text, the level-progress fill and miniature life bodies
+follow the player's accent color; reserved return colors, celebration colors and
+life-reward colors retain their existing priority. The text beneath the
+level-progress bar is hidden, including the stored-charge count and score feedback. The frame keeps its white/accent color animation.
+The older spatial border pulse was removed in commit `c171e7f` on October 1,
+2026, before the progressive magic-text work. It used a one-beat sinusoidal
+spawn pulse to swell border thickness to three times normal and compress the
+world projection by up to 8.4%. The current spawn-pulse timer still runs, but
+its value no longer controls border thickness or camera compression. The
+white/accent color flash remains; the return-color preview holds that accent
+color steady. The magic-only inner-border size pulse below is independent of
+this old spawn timer and color animation.
+
+The original pulse movement, timing and anchors remain unchanged. At pulse peaks,
+magic adds size to score, level, combo and combo-break text, the pause shortcut,
+world multiplier labels, enemies, the player, extra lives and the level-progress
+bar. One through six lit color-clear bars add 10%, 15%, 20%, 25%, 30% and 35%, respectively. This
+additional growth returns to zero between peaks and uses the lit-bar count even
+after stored charges reach their cap of two. Score, level and combo text keep their existing
+108% pulse, so their combined six-bar peak reaches 145.8% of the fitted base
+text size. The pause shortcut receives just the additional size. Existing popup growth
+and travel also remain intact. Enemies and extra lives retain their on-beat pulse;
+the player retains its half-beat offset. Extra growth preserves each element's
+existing center and movement. The progress bar retains its full original width;
+its normal pulse, pending-level glow and extra magic growth are vertical only.
+
+The inner border edge and four corners animate independently of the outer rim
+while magic is active. The edge swells in thickness on displayed beats 1 and 3;
+the corners grow around their individual centers on beats 2 and 4. The edge
+has a three-times-thickness base peak, and corners keep their 9% base pulse;
+both layer on the same progressive bonus. Their phase follows the metronome
+and each song's downbeat offset. Return-color previews and celebration colors
+do not suppress this size animation. The outermost rim stays fixed. Scenery, particles, bottom color-clear
+blocks, tongue, development clock and metronome receive no additional growth.
+While powered visuals are active, the player's pupils ease to 140% of their normal size over 0.2 seconds and ease back
+when magic ends. Pending absorption can delay the stored-charge presentation;
+an active magic shot enables it immediately. Pause freezes the presentation.
+Collision bounds, camera framing and touch coordinates retain their original behavior.
 
 The next successful firing consumes all stored charges and creates a rainbow piercing
 tongue. It hits any color, bypasses shields, and clears each struck enemy's
@@ -337,7 +379,7 @@ immediately, with no wind-up or charge animation. Repeated fire is blocked while
 the shot is active, and hit/game-over cancellation stops the shot. The old
 `MagicChargePresentation` placeholder remains unused for possible future reuse.
 Magic is twice as wide and travels at four times the normal extension and return
-speeds (56 and 80 world units/second), twice the previous magic speeds. It continues
+speeds (56 and 80 world units/second). It continues
 extending rather than retracting at first contact, unless that hit clears the
 fleet, in which case it immediately begins its visible return. Hits are swept over the full travel
 segment so a slow frame cannot skip intermediate enemies. Retraction does not
@@ -348,9 +390,17 @@ color survives elsewhere cannot retain magic, even if multiple charges were
 stored before firing. New awards do not change the current shot.
 
 Following the original reset rules, a player hit, fleet clear, or restart removes
-stored magic. The original color-wheel visual direction is no longer part of
+stored magic. The tongue uses the ordinary length-based whistle, so its faster
+travel produces a faster pitch glide rather than a separate magic sound. Genuine
+color clears also retain their existing rising tone and colored absorption dust.
+The original color-wheel visual direction is no longer part of
 the rebuild; the bottom color-clear blocks are the retained color-progress
 presentation.
+
+Audit finding: the direct `PrepareFatalDefeat` path cancels the shot and clears
+the bar streak but does not explicitly zero `MagicCharges`. Ordinary damage and
+starting a new run do reset that counter. The extra text and pupil presentation
+is disabled during fatal defeat; this retained counter behavior was left unchanged.
 
 ## Numbered Death Cascades
 
@@ -414,7 +464,7 @@ code but is no longer used by special Reds.
 ## Color-Clear Cycle
 
 A genuine last-of-color clear locks that color out of new rows and Purple
-summons while its color-clear bar remains visible. Level increases and override edits do
+summons while its color-clear bar remains powered. Level increases and override edits do
 not erase locks. Conversion and disabling enemies do not count as clears.
 Locks remain active during the refill pause; a successful new batch resets
 them after the entire fleet has been cleared. Restart also starts fresh.
@@ -428,6 +478,10 @@ shot can clear multiple colors, and one successful clear is enough. Breaking the
 streak releases the spawn locks for the disappearing bars, making those colors
 eligible for new rows and Purple summons again, subject to level and override
 settings. Seen-color history, score and magic rewards are not reset.
+The lost bars play the same simultaneous rise, fade and power-down sound as a
+partial fleet clear, over one beat at the current tempo. Their spawn locks release
+immediately; gameplay continues, pause freezes the fade, and a newly earned bar
+replaces its old power-down immediately.
 The next genuine color clear starts a fresh streak without restoring old bars.
 Uncleared colors draw nothing; clearing a color fills its slot. Slots represent
 distinct colors actually encountered in the current fleet, including cleared
@@ -454,8 +508,7 @@ the next beat one, using the same sharp arrival as refills.
 Opening fleets use a one-beat grow-in; full-set refills use the latter half of
 beat four. Ordinary new rows grow in over
 0.8 seconds; Purple summons use the original rift geometry and 0.8-second fade.
-Ordinary Purple summons use the arriving enemy's color. Special Purple summons
-always use a purple rift, regardless of the new
+Ordinary and special Purple summons always use a purple rift, regardless of the new
 enemy's color; its body, logical color and abilities remain unchanged.
 The sprite begins fully transparent immediately,
 preventing a full-opacity flash before animation. Blue's shield stays hidden

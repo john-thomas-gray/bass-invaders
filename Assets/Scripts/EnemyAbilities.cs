@@ -195,12 +195,13 @@ namespace CandyCruisers
                 if (Suspended || !isActiveAndEnabled) return;
             }
             bool startGreenSpin = false;
+            bool startSummonFlash = false;
             if (IsCasting)
             {
                 if (beatClock.Reached(castBeat))
                 {
                     castRemaining = 0;
-                    CompleteCast();
+                    startSummonFlash = CompleteCast();
                     ScheduleCooldown();
                     startGreenSpin = enemy.Color == EnemyColor.Green && enemy.IsSpecial;
                 }
@@ -246,13 +247,14 @@ namespace CandyCruisers
                         return;
                     }
                 }
-                else if (enemy.Color == EnemyColor.Purple) CompleteCast();
+                else if (enemy.Color == EnemyColor.Purple) startSummonFlash = CompleteCast();
                 else { castRemaining = 1; castBeat = beatClock.AfterBeats(1); }
             }
             RefreshVisuals();
             presentation.Tick(seconds, enemy.Color, Warning ? 1 : 0);
             // Start after the presentation tick so the completed windup cannot consume the new spin.
             if (startGreenSpin) presentation.DashGreen(grid.GetComponent<EnemyGridMovement>().Direction);
+            if (startSummonFlash) presentation.SummonFlash();
             if (awaitingSpawnShield && !presentation.IsPhasing)
             {
                 awaitingSpawnShield = false;
@@ -267,7 +269,7 @@ namespace CandyCruisers
             RefreshShield();
         }
 
-        private void CompleteCast()
+        private bool CompleteCast()
         {
             if (enemy.Color == EnemyColor.Green && GreenDashes)
             {
@@ -277,9 +279,10 @@ namespace CandyCruisers
             }
             else if (enemy.Color == EnemyColor.Purple)
             {
-                grid.GetComponent<EnemyRowSpawner>()?.TrySummon(enemy);
+                return grid.GetComponent<EnemyRowSpawner>()?.TrySummon(enemy) != null;
             }
             else if (enemy.Color == EnemyColor.Orange) grid.TryOrangeSwap(enemy.Id);
+            return false;
         }
 
         public bool BeginImitation(GridEnemy target)

@@ -89,6 +89,8 @@ namespace CandyCruisers
 
         public void RefreshBeat(float beatPosition, bool offbeat)
         {
+            if (body != null) body.sprite = EnemyBeatSprites.FrameAt(body.sprite, beatPosition);
+            GetComponent<EnemyPresentation>()?.RefreshSpriteFrame(beatPosition);
             if (visualRoot == null || visualRoot == transform) return;
             if (beatRoot == null)
             {
@@ -175,7 +177,7 @@ namespace CandyCruisers
         public PresentationCue PlayerFatalDefeat(EnemyColor color, int level)
         {
             Trigger(defeatTrigger); Defeated.Invoke();
-            return Spawn(defeatPrefab, PresentationCue.Kind.PlayerFatalDust, color, level);
+            return Spawn(defeatPrefab, PresentationCue.Kind.PlayerMelt, color, level);
         }
         private PresentationCue Spawn(PresentationCue prefab, PresentationCue.Kind kind, EnemyColor color, int depth, int? multiplier = null, bool colorClear = false)
         {

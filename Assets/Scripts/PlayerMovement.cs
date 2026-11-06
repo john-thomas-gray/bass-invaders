@@ -34,6 +34,9 @@ namespace CandyCruisers
         public PlayerLifeIcons LifeIcons { get; } = new PlayerLifeIcons();
         public EnemyColor? ReadyColor { get; private set; }
         public int MagicCharges { get; private set; }
+        public bool MagicPowerActive => MagicCharges > 0 && pendingMagicAbsorptions == 0 ||
+            tongue != null && tongue.Active && tongue.IsMagic;
+        public int ActiveMagicBars => MagicPowerActive && Fleet != null ? Fleet.ClearedColorCount : 0;
         public FleetState Fleet => grid != null ? grid.Fleet : null;
         public bool HasColorClearBar(EnemyColor color) => grid != null && grid.HasColorClearBar(color);
         public Color? CelebrationColor { get; private set; }
@@ -48,7 +51,7 @@ namespace CandyCruisers
         private bool reservedCelebrationColor;
         public bool ShotActive => tongue != null && tongue.Active;
         public bool HasFleet => grid != null && grid.Fleet.Count > 0;
-        public void FinishWaveReturn() { if (tongue != null && tongue.Active) tongue.Cancel(); }
+        public void FinishWaveReturn() { if (tongue != null && tongue.Active) tongue.Cancel(true); }
         public bool Stunned { get; private set; }
         public void PrepareNextWave(EnemyColor[] plan, EnemyColor? reservedColor = null)
         {
@@ -94,8 +97,7 @@ namespace CandyCruisers
             if (shock != null && shock.BodyTint.HasValue) { body.color = shock.BodyTint.Value; return; }
             if (CelebrationColor.HasValue) { body.color = CelebrationColor.Value; return; }
             if (Stunned) { if (tongue == null || !tongue.ShockActive) body.color = Color.gray; return; }
-            bool magic = MagicCharges > 0 && pendingMagicAbsorptions == 0 ||
-                tongue != null && tongue.Active && tongue.IsMagic;
+            bool magic = MagicPowerActive;
             var music = Music;
             float flashPhase = music != null && music.InGameplayRun ? Mathf.Max(0, music.BeatPosition) * 4 : time * 10;
             body.color = magic ? EnemyPalette.Get(EnemyPalette.CycleColor(Mathf.FloorToInt(flashPhase))) :
@@ -112,6 +114,10 @@ namespace CandyCruisers
         public event System.Action<bool> ShotRetractionStarted;
         public event System.Action PlayerHit;
         public event System.Action FatalHit;
+        public event System.Action<bool> MagicChargeAwarded;
+        public event System.Action<float> HorizontalAction;
+        public event System.Action<float> HorizontalTravelled;
+        public bool AutonomousControl { get; internal set; }
         private void OnEnable() => SubscribeToGrid();
         private void OnDisable() { UnsubscribeFromGrid(); ClearRecoveryCue(); }
         private void OnDestroy() { UnsubscribeFromGrid(); ClearRecoveryCue(); LifeIcons.Dispose(); }
@@ -149,6 +155,7 @@ namespace CandyCruisers
         {
             int previous = MagicCharges;
             MagicCharges = Mathf.Min(2, MagicCharges + 1);
+            MagicChargeAwarded?.Invoke(MagicCharges > previous);
             if (!ShotActive) return;
             shotClearedColor = true;
             if (Application.isPlaying && MagicCharges > previous) pendingMagicAbsorptions++;
@@ -524,7 +531,7 @@ namespace CandyCruisers
             return allowed;
         }
 
-        private List<Vector2> ReachableShotOrigins()
+        public List<Vector2> ReachableShotOrigins()
         {
             var intervals = new List<Vector2> { new Vector2(-HalfWidth, HalfWidth) };
             if (grid == null) return intervals;
@@ -627,6 +634,7 @@ namespace CandyCruisers
 
         private void MoveHorizontal(float distance)
         {
+            HorizontalAction?.Invoke(distance);
             horizontalDirection = 0;
             horizontalMovementFrame = Time.frameCount;
             var session = grid != null ? grid.GetComponent<GameSession>() : null;
@@ -638,6 +646,7 @@ namespace CandyCruisers
                 float segment = direction * Mathf.Min(Mathf.Abs(distance), Mathf.Abs(edge - transform.position.x));
                 float fraction = session != null ? session.ContactFraction(-segment) : 1;
                 transform.position += Vector3.right * (segment * fraction);
+                HorizontalTravelled?.Invoke(Mathf.Abs(segment * fraction));
                 if (Mathf.Abs(segment * fraction) > .000001f) horizontalDirection = direction;
                 if (session != null) session.FinishContactMove(fraction);
                 if (ControlsLocked) return;
@@ -774,7 +783,7 @@ namespace CandyCruisers
             tongue.Tick(Time.deltaTime, grid);
             RefreshColor();
             RefreshPresentation(Time.time);
-            if (Stunned) return;
+            if (Stunned || AutonomousControl) return;
             float axis = (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D) ? 1 : 0)
                 - (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A) ? 1 : 0);
             if (axis != 0) { movingToTarget = false; Move(axis, Time.deltaTime); }

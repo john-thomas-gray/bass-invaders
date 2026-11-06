@@ -54,7 +54,7 @@ namespace CandyCruisers.Editor
                     grid.Unregister(removed); UnityEngine.Object.DestroyImmediate(removed.gameObject);
                     var summoned = spawner.TrySummon(grid.View(grid.Model.At(0, 0).Id));
                     Check(summoned != null, "Summon created");
-                    VerifyArrival(summoned, color, true);
+                    VerifyArrival(summoned, EnemyColor.Purple, true);
                     foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
                     { grid.Unregister(enemy); UnityEngine.Object.DestroyImmediate(enemy.gameObject); }
                     var opening = spawner.PlanOpening();
@@ -143,9 +143,9 @@ namespace CandyCruisers.Editor
                     Check(summoned != null && summoned.Color == color && grid.Model.At(summoned.Column, summoned.Row).Color == color,
                         "Portal tint does not change actual enemy color");
                     var ability = summoned.GetComponent<EnemyAbilities>();
-                    VerifyArrival(summoned, special ? EnemyColor.Purple : color, true);
+                    VerifyArrival(summoned, EnemyColor.Purple, true);
                     var rift = summoned.Visuals.Root.Find("Summoning rift").GetComponent<LineRenderer>();
-                    var expected = (Color32)Color.Lerp(EnemyPalette.Get(special ? EnemyColor.Purple : color), Color.white, .25f);
+                    var expected = (Color32)Color.Lerp(EnemyPalette.Get(EnemyColor.Purple), Color.white, .25f);
                     for (int i = 0; i < 3; i++)
                     {
                         // Isolate portal/body presentation from independently tuned ability warnings.

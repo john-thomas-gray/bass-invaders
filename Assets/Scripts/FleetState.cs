@@ -14,13 +14,14 @@ namespace CandyCruisers
         public int Columns { get; }
         public int Rows => cells.Length / Columns;
         public int CellCount => cells.Count(cell => cell.HasValue);
-        public IReadOnlyList<EnemyColor> SpawnPalette { get; }
+        // The opening palette is a fleet invariant, never the broader authoring pool.
+        public IReadOnlyList<EnemyColor> SpawnPalette => Colors;
         public IReadOnlyDictionary<char, EnemyColor> Bindings { get; }
         public IReadOnlyList<string> LineSpawns { get; }
         public bool IsScripted { get; }
         public FleetPlan(EnemyColor[] cells, int columns) : this(cells == null ? null :
             Array.ConvertAll(cells, cell => (EnemyColor?)cell), columns) { }
-        public FleetPlan(EnemyColor?[] cells, int columns, IEnumerable<EnemyColor> palette = null,
+        public FleetPlan(EnemyColor?[] cells, int columns,
             IDictionary<char, EnemyColor> bindings = null, string[] lineSpawns = null)
         {
             if (cells == null || cells.Length == 0 || columns < 1 || columns > GridModel.Columns ||
@@ -31,7 +32,6 @@ namespace CandyCruisers
             colors = LevelDefinition.UniqueColors(OccupiedColors()); colors.Sort();
             if (colors.Count == 0) throw new ArgumentException("A fleet must contain an enemy.");
             Colors = colors.AsReadOnly();
-            SpawnPalette = new List<EnemyColor>(palette ?? colors).AsReadOnly();
             Bindings = new ReadOnlyDictionary<char, EnemyColor>(bindings == null ? new Dictionary<char, EnemyColor>() :
                 new Dictionary<char, EnemyColor>(bindings));
             LineSpawns = Array.AsReadOnly(lineSpawns == null ? Array.Empty<string>() : (string[])lineSpawns.Clone());

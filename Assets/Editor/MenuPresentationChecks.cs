@@ -34,8 +34,14 @@ namespace CandyCruisers.Editor
             RunSized(1100, 740);
         }
 
-        private static void RunSized(float width, float height)
+        public static void RunPhone()
         {
+            RunSized(440, 820, true);
+        }
+
+        private static void RunSized(float width, float height, bool phone = false)
+        {
+            SessionState.SetBool(Pending + ".Phone", phone);
             var type = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
             foreach (var existing in Resources.FindObjectsOfTypeAll(type))
                 ((EditorWindow)existing).Close();
@@ -50,6 +56,8 @@ namespace CandyCruisers.Editor
             if (!SessionState.GetBool(Pending, false) || !EditorApplication.isPlaying) return;
             try
             {
+                GameSession.ForceMobileMenuForTests = SessionState.GetBool(Pending + ".Phone", false);
+                GameplayFraming.ForceIphoneNotchOffsetForTests = GameSession.ForceMobileMenuForTests;
                 Application.runInBackground = true;
                 var session = UnityEngine.Object.FindFirstObjectByType<GameSession>();
                 var player = UnityEngine.Object.FindFirstObjectByType<PlayerMovement>();
@@ -91,6 +99,8 @@ namespace CandyCruisers.Editor
                 else
                 {
                     Debug.Log("Menu presentation checks passed: slime artwork, locked arrival and gameplay handover.");
+                    GameSession.ForceMobileMenuForTests = false;
+                    GameplayFraming.ForceIphoneNotchOffsetForTests = false;
                     SessionState.SetBool(Pending, false);
                     EditorApplication.Exit(0);
                 }
@@ -99,6 +109,8 @@ namespace CandyCruisers.Editor
             catch (Exception ex)
             {
                 Debug.LogException(ex);
+                GameSession.ForceMobileMenuForTests = false;
+                GameplayFraming.ForceIphoneNotchOffsetForTests = false;
                 SessionState.SetBool(Pending, false);
                 EditorApplication.Exit(1);
             }

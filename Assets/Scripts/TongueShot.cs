@@ -31,6 +31,7 @@ namespace CandyCruisers
         // legacy-v1 Tongue.cs: maxSpeed 20, speedFactor = -0.25 + 0.01 * level.
         public static float DeflectedReturnSpeed(int level) => 20f * Mathf.Max(.01f, .25f - .01f * Mathf.Max(1, level));
         public bool Active { get; private set; }
+        public bool LastCompletionCancelled { get; private set; }
         public bool Retracting => Active && travel >= maximumLength;
         public float Length => Active ? (Retracting ? Mathf.Max(0, 2 * maximumLength - travel) : travel) : 0;
         public float ReturnSpeed => deflectedRetractSpeed > 0 ? deflectedRetractSpeed : retractSpeed * (IsMagic ? 4 : 1);
@@ -116,6 +117,7 @@ namespace CandyCruisers
             maximumLength = length;
             travel = 0;
             Active = true;
+            LastCompletionCancelled = false;
             SetVisualColor(color, magic);
             Draw();
             ExtensionStarted?.Invoke();
@@ -228,6 +230,7 @@ namespace CandyCruisers
             if (seconds > 0) travel += seconds * returnRate;
             if (travel >= 2 * maximumLength)
             {
+                LastCompletionCancelled = false;
                 Active = false;
                 Finished?.Invoke();
             }
@@ -305,7 +308,7 @@ namespace CandyCruisers
             if (line == null) line = GetComponent<LineRenderer>();
             EnsureTipBulb();
             line.enabled = Active;
-            line.positionCount = IsMagic || ShockActive ? 33 : 2;
+            line.positionCount = IsMagic || Retracting && returnPreviewMagic || ShockActive ? 33 : 2;
             for (int i = 0; i < line.positionCount; i++)
                 line.SetPosition(i, Vector3.up * (Length * i / (line.positionCount - 1)));
             tipBulb.enabled = Active;
@@ -319,9 +322,10 @@ namespace CandyCruisers
             if (Active) tipBulb.color = line.colorGradient.Evaluate(1);
             MotionUpdated?.Invoke();
         }
-        public void Cancel()
+        public void Cancel(bool completed = false)
         {
             bool wasActive = Active;
+            LastCompletionCancelled = wasActive && !completed;
             Active = false;
             deflectedRetractSpeed = 0;
             ResetShock();

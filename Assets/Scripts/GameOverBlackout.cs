@@ -10,12 +10,13 @@ namespace CandyCruisers
         public const int CoverOrder = 30000;
         private SpriteRenderer cover;
         private Sprite sprite;
-        private FatalImpactBackdrop impact;
         private SortingGroup heldPlayer;
         private Transform heldArtwork;
         private bool ownsPlayerGroup, playerGroupEnabled;
         private int playerSortingLayer, playerSortingOrder;
         private Vector3 playerLocalPosition, playerLocalCenter;
+        private PlayerDeathEyeMotion eyeMotion;
+        private float riseAge;
 
         public static GameOverBlackout Create(Transform owner, PresentationCue death)
         {
@@ -32,13 +33,14 @@ namespace CandyCruisers
             return blackout;
         }
 
-        public void HoldPlayer(Transform artwork)
+        public void HoldPlayer(Transform artwork, float risingSeconds = 2)
         {
             ReleasePlayer();
             if (artwork == null) return;
             heldArtwork = artwork;
             playerLocalPosition = artwork.localPosition;
             playerLocalCenter = VisualCenter(artwork);
+            eyeMotion = new PlayerDeathEyeMotion(artwork, risingSeconds);
             heldPlayer = artwork.GetComponent<SortingGroup>();
             ownsPlayerGroup = heldPlayer == null;
             if (ownsPlayerGroup) heldPlayer = artwork.gameObject.AddComponent<SortingGroup>();
@@ -63,13 +65,15 @@ namespace CandyCruisers
         {
             group.enabled = true;
             group.sortingLayerID = cover.sortingLayerID;
-            group.sortingOrder = FatalImpactBackdrop.SortingOrder + 1;
+            group.sortingOrder = CoverOrder + 1;
             // Apply ordering before the creation frame can render the blackout.
             SortingGroup.UpdateAllSortingGroups();
         }
 
         private void ReleasePlayer()
         {
+            eyeMotion?.Restore();
+            eyeMotion = null;
             if (heldPlayer == null) return;
             heldPlayer.sortingLayerID = playerSortingLayer;
             heldPlayer.sortingOrder = playerSortingOrder;
@@ -85,18 +89,12 @@ namespace CandyCruisers
             SortingGroup.UpdateAllSortingGroups();
         }
 
-        public void BeginImpact(Vector3 position, int level)
+        public void Present(float opacity, float risingSeconds = 0)
         {
-            if (impact == null) impact = FatalImpactBackdrop.Create(transform, position, cover.sharedMaterial,
-                GetComponentInParent<EnemyGrid>()?.Fleet.Colors);
-        }
-
-        public void Present(float opacity, float impactAge = float.PositiveInfinity)
-        {
+            riseAge = Mathf.Max(0, risingSeconds);
             cover.color = new Color(0, 0, 0, Mathf.Clamp01(opacity));
             cover.enabled = opacity > 0;
             MoveHeldPlayer(opacity);
-            if (impact != null) impact.Present(impactAge);
             LateUpdate();
         }
 
@@ -123,6 +121,7 @@ namespace CandyCruisers
 
         private void LateUpdate()
         {
+            eyeMotion?.Present(riseAge);
             var camera = Camera.main;
             if (cover == null || camera == null) return;
             float depth = camera.nearClipPlane + 1;
@@ -133,7 +132,6 @@ namespace CandyCruisers
             var parentScale = transform.parent != null ? transform.parent.lossyScale : Vector3.one;
             transform.localScale = new Vector3(Mathf.Abs(diagonal.x / parentScale.x) / sprite.bounds.size.x,
                 Mathf.Abs(diagonal.y / parentScale.y) / sprite.bounds.size.y, 1) * 1.01f;
-            if (impact != null) impact.Refresh();
         }
 
         private void OnDestroy()

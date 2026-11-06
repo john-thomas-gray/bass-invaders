@@ -228,9 +228,11 @@ namespace CandyCruisers
                         var reward = Add(color, 0, 0);
                         Grid.ClearMatchingChain(reward.Id, color);
                     }
-                    Session.Progress.RegisterClear(Mathf.Max(1, (Session.Progress.NextThreshold - Session.Progress.PreviousThreshold) / 2), false);
-                    At(3, () => Session.Progress.RegisterClear(Session.Progress.NextThreshold - Session.Progress.Defeated +
-                        (RunProgress.NextThresholdForLevel(Level + 1, Session.LevelCatalog) - Session.Progress.NextThreshold) / 3, false));
+                    if (Session.Progress.FleetsToClear > 1) Session.Progress.RegisterClear(1, true);
+                    At(3, () => {
+                        if (Session.Progress.ClearedFleets + 1 < Session.Progress.FleetsToClear)
+                            Session.Progress.RegisterClear(1, true);
+                    });
                     ScenarioSeconds = 6;
                     break;
                 case Animation.Tongue:
@@ -278,7 +280,7 @@ namespace CandyCruisers
                     Session.Progress.RegisterClear(12, false);
                     for (int i = 0; i < PlayerMovement.MaxExtraLives; i++) SpendSpare();
                     At(.5f, () => { Player.ControlsLocked = false; Player.Hit(true); });
-                    ScenarioSeconds = GameSession.GameOverBlackoutBeats * music.BeatDuration + PlayerFatalDustBurst.Duration + 4;
+                    ScenarioSeconds = GameSession.GameOverBlackoutBeats * music.BeatDuration + PlayerMeltDeath.Duration + 4;
                     break;
                 case Animation.RedShot:
                     ClearEnemies();

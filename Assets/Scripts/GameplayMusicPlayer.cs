@@ -8,8 +8,6 @@ namespace CandyCruisers
         public const string DefaultResourceName = "DiscoDescent";
         public const string MenuResourceName = "AnotherJoe";
         public const string CountingResourceName = "CountingMetronome";
-        // Temporary menu-start lock; set to an empty string to restore random starts.
-        private const string TemporaryMenuStartResourceName = "DiscoDescent";
         public const int BeatsPerMeasure = 4;
         // Measure alignment is separate from the individual-beat clock.
         public const int DownbeatOffsetBeats = 1;
@@ -60,8 +58,10 @@ namespace CandyCruisers
         private LevelDefinition appliedLevelDefinition;
         private bool levelSoundtrackApplied;
         private System.Collections.Generic.HashSet<string> levelTracks;
+        private bool hasSelectedLevelTracks;
         private bool TrackAllowed(string name) => name != CountingResourceName &&
-            (levelTracks == null || levelTracks.Contains(name));
+            SongSelectionSettings.IsSelected(name) &&
+            (levelTracks == null || !hasSelectedLevelTracks || levelTracks.Contains(name));
         private bool UsesCustomTrack => track != null && TrackAllowed(track.name);
         public int TrackCount => soundtrack.Length;
         [SerializeField, Range(0, 11)] private int customTrackRelativeMajorTonic;
@@ -166,7 +166,8 @@ namespace CandyCruisers
             }
             return durations;
         }
-        public AudioClip MenuTrack => MetronomeSettings.VoiceEnabled ? CountingTrack : menuTrack != null ? menuTrack :
+        public AudioClip MenuTrack => MetronomeSettings.VoiceEnabled ? CountingTrack :
+            menuTrack != null && SongSelectionSettings.IsSelected(menuTrack.name) ? menuTrack :
             resourceMenuTrack != null ? resourceMenuTrack : SelectMenuTrack();
         public AudioClip Track
         {
@@ -183,6 +184,23 @@ namespace CandyCruisers
             System.Array.Exists(soundtrack, song => song.resourceName == name);
         public string[] SoundtrackNames => System.Array.ConvertAll(soundtrack, song => song.resourceName);
         public bool IsTrackAllowedForLevel(string name) => TrackAllowed(name);
+        public bool SetSongSelected(string name, bool selected)
+        {
+            if (!SongSelectionSettings.TrySetSelected(name, selected, SoundtrackNames)) return false;
+            RefreshSongSelection();
+            UpdatePlayback();
+            return true;
+        }
+
+        private void RefreshSongSelection()
+        {
+            hasSelectedLevelTracks = levelTracks != null && System.Array.Exists(soundtrack,
+                song => levelTracks.Contains(song.resourceName) && SongSelectionSettings.IsSelected(song.resourceName));
+            remainingSongs.Clear();
+            if (carriedMenuTrack != null && !TrackAllowed(carriedMenuTrack.name)) carriedMenuTrack = null;
+            if (resourceTrack != null && !TrackAllowed(resourceTrack.name)) resourceTrack = null;
+            if (resourceMenuTrack != null && !SongSelectionSettings.IsSelected(resourceMenuTrack.name)) resourceMenuTrack = null;
+        }
         public void SelectNextTrack()
         {
             carriedMenuTrack = null;
@@ -226,14 +244,11 @@ namespace CandyCruisers
             if (soundtrack.Length > 0)
             {
                 int start = shuffle.Next(soundtrack.Length);
-                int lockedIndex = System.Array.FindIndex(soundtrack,
-                    song => song.resourceName == TemporaryMenuStartResourceName);
-                if (lockedIndex >= 0 && Resources.Load<AudioClip>(soundtrack[lockedIndex].resourceName) != null)
-                    start = lockedIndex;
                 for (int offset = 0; offset < soundtrack.Length; offset++)
                 {
                     int index = (start + offset) % soundtrack.Length;
-                    if (soundtrack[index].resourceName == CountingResourceName) continue;
+                    if (soundtrack[index].resourceName == CountingResourceName ||
+                        !SongSelectionSettings.IsSelected(soundtrack[index].resourceName)) continue;
                     resourceMenuTrack = Resources.Load<AudioClip>(soundtrack[index].resourceName);
                     if (resourceMenuTrack == null) continue;
                     songIndex = index;
@@ -241,7 +256,8 @@ namespace CandyCruisers
                 }
             }
             songIndex = System.Array.FindIndex(soundtrack, song => song.resourceName == MenuResourceName);
-            return resourceMenuTrack = Resources.Load<AudioClip>(MenuResourceName);
+            return resourceMenuTrack = SongSelectionSettings.IsSelected(MenuResourceName) ?
+                Resources.Load<AudioClip>(MenuResourceName) : null;
         }
         public bool InGameplayRun => session != null &&
             (session.State == GameSession.RunState.Playing || session.State == GameSession.RunState.Refilling);
@@ -259,6 +275,8 @@ namespace CandyCruisers
         private void Awake() => EnsureSource();
         private void OnEnable()
         {
+            SongSelectionSettings.EnsureSelection(SoundtrackNames);
+            RefreshSongSelection();
             if (session == null) session = GetComponent<GameSession>() ?? FindFirstObjectByType<GameSession>();
             UpdatePlayback();
         }
@@ -443,9 +461,9 @@ namespace CandyCruisers
             levelSoundtrackApplied = true;
             var names = definition != null ? definition.possibleSoundtrackTracks : null;
             levelTracks = names != null && names.Length > 0 ? new System.Collections.Generic.HashSet<string>(names) : null;
-            remainingSongs.Clear();
-            if (carriedMenuTrack != null && !TrackAllowed(carriedMenuTrack.name)) carriedMenuTrack = null;
-            if (resourceTrack != null && !TrackAllowed(resourceTrack.name)) resourceTrack = null;
+            // Prefer the level's tracks when they overlap the player's selection. Otherwise
+            // use the selected soundtrack so an exclusive selection can play on every level.
+            RefreshSongSelection();
             RefillShuffleBag();
             var retained = carriedMenuTrack != null ? carriedMenuTrack : resourceTrack;
             if (retained != null)

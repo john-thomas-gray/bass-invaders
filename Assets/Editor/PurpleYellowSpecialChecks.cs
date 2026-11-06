@@ -47,6 +47,40 @@ namespace CandyCruisers.Editor
             {
                 SpawnOverride.Enabled = true;
                 SpawnOverride.Types = 1 << (int)EnemyColor.Red;
+                foreach (bool special in new[] { false, true })
+                    SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+                    {
+                        var purple = Add(grid, EnemyColor.Purple, 2, 1);
+                        if (special)
+                        {
+                            Add(grid, EnemyColor.Purple, 1, 1);
+                            Add(grid, EnemyColor.Purple, 1, 0);
+                            grid.RefreshSpecials();
+                        }
+                        var presentation = purple.GetComponent<EnemyPresentation>();
+                        var scale = purple.Visuals.Body.transform.localScale;
+                        var summoned = grid.GetComponent<EnemyRowSpawner>().TrySummon(purple);
+                        Check(summoned != null && purple.Visuals.Body.color == Color.white,
+                            "Successful ordinary and special summons flash the source Purple white");
+                        var halo = purple.GetComponentsInChildren<LineRenderer>()
+                            .Where(line => line.name.StartsWith("Purple summon flash")).ToArray();
+                        Check(halo.Length == 2 && halo.All(line => line.enabled && !line.useWorldSpace),
+                            "Summoning Purple has a bright local electric halo");
+                        presentation.Tick(.06f, EnemyColor.Purple, 0);
+                        Check(purple.Visuals.Body.color == Color.white, "Summon flash holds white long enough to read");
+                        presentation.Tick(EnemyPresentation.SummonFlashSeconds, EnemyColor.Purple, 0);
+                        Check(purple.Visuals.Body.color == EnemyPalette.Get(EnemyColor.Purple) &&
+                            halo.All(line => !line.enabled) && purple.Visuals.Body.transform.localScale == scale,
+                            "Summon flash fades to Purple without changing geometry");
+                        var ability = purple.GetComponent<EnemyAbilities>();
+                        ability.Tick(ability.CooldownRemaining + .01f);
+                        Check(purple.Visuals.Body.color == Color.white && halo.All(line => line.enabled),
+                            "The triggering frame cannot consume the new flash, even with a large frame delta");
+                        grid.SetColor(purple.Id, EnemyColor.Blue);
+                        presentation.Tick(0, EnemyColor.Blue, 0);
+                        Check(halo.All(line => !line.enabled), "Recoloring cancels the summon halo");
+                        presentation.Clear();
+                    });
                 foreach (int rows in new[] { 3, GridModel.Rows - 2, GridModel.Rows - 1, GridModel.Rows })
                     SpecialEnemyChecks.Fixture((grid, player, tongue) =>
                     {

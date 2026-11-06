@@ -24,10 +24,17 @@ namespace CandyCruisers
         public bool IsColorCleared(EnemyColor color) => Fleet.IsCleared(color);
         public bool HasColorClearBar(EnemyColor color) => IsColorCleared(color);
         public bool AllColorClearBarsFilled => Fleet.AllColorsCleared;
-        public void ResetColorClearStreak() => Fleet.ResetClearStreak();
+        public void ResetColorClearStreak()
+        {
+            if (Fleet.ClearedColorCount == 0) return;
+            var lostColors = Fleet.CopyColors().FindAll(Fleet.IsCleared);
+            Fleet.ResetClearStreak();
+            ColorClearStreakReset?.Invoke(lostColors);
+        }
         public void BeginColorCycle() => Fleet.ResetCycle();
         public event System.Action FleetCleared;
         public event System.Action<EnemyColor> ColorCleared;
+        public event System.Action<List<EnemyColor>> ColorClearStreakReset;
         public event System.Action<EnemyColor> EnemyDestroyed;
         public event System.Action LastYellowTransformed;
         public event System.Action<int, bool, int> MatchCleared;

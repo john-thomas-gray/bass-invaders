@@ -42,7 +42,7 @@ namespace CandyCruisers
             {
                 var root = JObject.Parse(json, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
                 Fields(root, "schemaVersion", "levels");
-                if (Integer(root, "schemaVersion") != 1) throw new FormatException("schemaVersion must be 1.");
+                if (Integer(root, "schemaVersion") != 3) throw new FormatException("schemaVersion must be 3; levels contain fleet objects with possibleColors, initialFleet and lineSpawns.");
                 if (!(root["levels"] is JObject entries) || entries.Count == 0) throw new FormatException("levels must be an object containing level 1.");
                 var catalog = new LevelCatalog { levels = new LevelDefinition[entries.Count] };
                 foreach (var entry in entries.Properties())
@@ -50,14 +50,12 @@ namespace CandyCruisers
                     if (!int.TryParse(entry.Name, out int number) || number < 1 || number > entries.Count || entry.Name != number.ToString())
                         throw new FormatException("Level keys must be consecutive numbers starting at 1.");
                     if (!(entry.Value is JObject data)) throw new FormatException("Level " + number + " must be an object.");
-                    Fields(data, "enemiesToDefeat", "numberOfColors", "possibleColors", "requiredColors", "backgroundImage",
-                        "possibleSoundtrackTracks", "fleetSpawns", "lineSpawns");
+                    Fields(data, "backgroundImage", "possibleSoundtrackTracks", "fleets");
                     var level = new LevelDefinition {
-                        enemiesToDefeat = Integer(data, "enemiesToDefeat"), numberOfColors = Integer(data, "numberOfColors"),
-                        possibleColors = Colors(data, "possibleColors"), requiredColors = Colors(data, "requiredColors"),
                         possibleSoundtrackTracks = Strings(data, "possibleSoundtrackTracks"),
-                        fleetSpawns = Strings(data, "fleetSpawns"), lineSpawns = Strings(data, "lineSpawns")
+                        fleets = Fleets(data)
                     };
+                    if (data.Property("backgroundImage") == null) throw new FormatException(data.Path + ".backgroundImage is required.");
                     var background = data["backgroundImage"];
                     if (background != null && background.Type != JTokenType.String && background.Type != JTokenType.Null)
                         throw new FormatException("backgroundImage must be a resource name or an empty string.");
@@ -89,12 +87,32 @@ namespace CandyCruisers
         }
         private static string[] Strings(JObject data, string name)
         {
-            if (!(data[name] is JArray array)) throw new FormatException(name + " must be a list of strings.");
+            if (!(data[name] is JArray array)) throw new FormatException(data.Path + "." + name + " must be a list of strings.");
             var result = new string[array.Count];
             for (int i = 0; i < result.Length; i++)
             {
-                if (array[i].Type != JTokenType.String) throw new FormatException(name + "[" + i + "] must be a string.");
+                if (array[i].Type != JTokenType.String) throw new FormatException(data.Path + "." + name + "[" + i + "] must be a string.");
                 result[i] = array[i].Value<string>();
+            }
+            return result;
+        }
+        private static FleetDefinition[] Fleets(JObject data)
+        {
+            string name = data.Path + ".fleets";
+            if (!(data["fleets"] is JArray fleets)) throw new FormatException(name + " must be a list of fleet objects.");
+            var result = new FleetDefinition[fleets.Count];
+            for (int fleet = 0; fleet < fleets.Count; fleet++)
+            {
+                string label = name + "[" + fleet + "]";
+                if (!(fleets[fleet] is JObject entry)) throw new FormatException(label + " must be a fleet object.");
+                Fields(entry, "possibleColors", "requiredColors", "initialFleet", "lineSpawns");
+                result[fleet] = new FleetDefinition
+                {
+                    possibleColors = Colors(entry, "possibleColors"),
+                    requiredColors = entry.Property("requiredColors") == null ? Array.Empty<EnemyColor>() : Colors(entry, "requiredColors"),
+                    initialFleet = Strings(entry, "initialFleet"),
+                    lineSpawns = Strings(entry, "lineSpawns")
+                };
             }
             return result;
         }

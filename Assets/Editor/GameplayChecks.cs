@@ -11,6 +11,7 @@ namespace CandyCruisers.Editor
         [MenuItem("Candy Cruisers/Run Checks")]
         public static void Run()
         {
+            using var songs = new SongSelectionCheckSettings();
             using var metronomes = new MetronomeCheckSettings();
             bool previousOverride = SpawnOverride.Enabled;
             SpawnOverride.Enabled = false;
@@ -49,6 +50,7 @@ namespace CandyCruisers.Editor
             SpawnOverrideChecks.Run();
             DeveloperOptionsChecks.Run();
             MetronomeOptionsChecks.Run();
+            SongSelectionChecks.Run();
             CombatChecks.Run();
             ColorCycleChecks.Run();
             WaveTransitionChecks.Run();
@@ -86,6 +88,7 @@ namespace CandyCruisers.Editor
             OrangeChecks.Run();
             ComboLeaderboardBackgroundChecks.Run();
             ShotColorComboChecks.Run();
+            PlaytestChecks.Run();
             Directory.CreateDirectory("TestResults");
             Capture(540, 960, "portrait");
             Capture(960, 540, "landscape");

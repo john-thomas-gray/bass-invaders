@@ -57,6 +57,7 @@ namespace CandyCruisers.Editor
             if (!SessionState.GetBool(Pending, false) || !Application.isPlaying) return;
             try
             {
+                Application.runInBackground = true;
                 if (runtimeError != null) throw new Exception(runtimeError);
                 if (started == 0) started = EditorApplication.timeSinceStartup;
                 if (EditorApplication.timeSinceStartup - started > 360) throw new Exception("Preview checks timed out");
@@ -161,7 +162,7 @@ namespace CandyCruisers.Editor
                 if (stage.Selected == AnimationPreviewStage.Animation.GameOver)
                 {
                     if (stage.Elapsed < .6f + stage.Session.GameOverBlackoutSeconds +
-                        PlayerFatalDustBurst.Duration + GameSession.GameOverTitleFadeSeconds) return;
+                        PlayerMeltDeath.Duration + GameSession.GameOverTitleFadeSeconds) return;
                     Check(stage.Session.GameOverTitleReady && stage.Session.LastLeaderboardRank == 0,
                         "Full death sequence completes without recording a score");
                     Check(LeaderboardSnapshot() == leaderboard, "Preview leaves leaderboard entries unchanged");
@@ -201,9 +202,10 @@ namespace CandyCruisers.Editor
                     Check(stage.Session.State == GameSession.RunState.Playing && stage.Grid.Model.Count > 0,
                         "Start Game reaches a real playing fleet");
                 if (stage.Selected == AnimationPreviewStage.Animation.Idle)
-                    Check(stage.Session.Progress.LevelUpPending && stage.Session.Progress.BankedLevelProgressFraction > 0 &&
+                    Check(stage.Session.Progress.UsesScriptedProgression && !stage.Session.Progress.LevelUpPending &&
+                        stage.Session.Progress.ActiveLevelProgressFraction > 0 && stage.Session.Progress.ActiveLevelProgressFraction < 1 &&
                         Enum.GetValues(typeof(EnemyColor)).Cast<EnemyColor>().Count(stage.Grid.HasColorClearBar) >= 2 &&
-                        !stage.Player.CelebrationColor.HasValue, "Idle includes partial progress, pending-level beat flashes, powered bars and unmasked beat colors");
+                        !stage.Player.CelebrationColor.HasValue, "Idle includes completed-fleet progress, powered bars and unmasked beat colors");
                 if (stage.Selected == AnimationPreviewStage.Animation.WaveTransition || stage.Selected == AnimationPreviewStage.Animation.LifeGain)
                 {
                     Check(stage.Session.State == GameSession.RunState.Playing && stage.Grid.Model.Count > 0,

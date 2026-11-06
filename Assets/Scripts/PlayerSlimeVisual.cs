@@ -24,6 +24,14 @@ namespace CandyCruisers
         private Texture2D texture;
         public Sprite PlaceholderSprite => sprite;
 
+        public Vector3 DefaultPupilPosition(Transform pupil)
+        {
+            if (face != null)
+                for (int i = 0; i < face.Length; i++)
+                    if (face[i] == pupil) return pupil.parent.TransformPoint(facePositions[i]);
+            return pupil.position;
+        }
+
         public Vector3 FaceDisplacement(Transform piece, Transform relativeTo)
         {
             if (face == null) return Vector3.zero;

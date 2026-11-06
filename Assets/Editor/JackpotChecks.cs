@@ -120,14 +120,19 @@ namespace CandyCruisers.Editor
                 var blue = ProgressionChecks.Add(grid, EnemyColor.Blue, 2, 0);
                 var green = ProgressionChecks.Add(grid, EnemyColor.Green, 4, 0);
                 grid.ClearMatchingChain(red.Id, EnemyColor.Red);
-                if (partial) grid.ResetColorClearStreak();
+                if (partial)
+                {
+                    grid.ResetColorClearStreak();
+                    Check(pitches.Count == 1, "Losing the earned bar plays its own power-down cue");
+                    pitches.Clear();
+                }
                 grid.ClearMatchingChain(blue.Id, EnemyColor.Blue);
                 grid.ClearMatchingChain(green.Id, EnemyColor.Green);
                 Check(session.ClearCelebration.Active && grid.AllColorClearBarsFilled == !partial && jackpots == (partial ? 0 : 1),
                     "Both complete and partial sets transition, with a jackpot only for complete sets");
                 var earned = partial ? new[] { EnemyColor.Blue, EnemyColor.Green } : new[] { EnemyColor.Red, EnemyColor.Blue, EnemyColor.Green };
                 var powerDownVoice = partial ? grid.GetComponentsInChildren<AudioSource>()
-                    .FirstOrDefault(source => source.clip == sounds.GetClip(SoundEffect.BarPowerDown)) : null;
+                    .LastOrDefault(source => source.clip == sounds.GetClip(SoundEffect.BarPowerDown)) : null;
                 int hidden = 0;
                 float transitionDuration = session.ClearCelebration.PlaybackDuration;
                 if (partial)

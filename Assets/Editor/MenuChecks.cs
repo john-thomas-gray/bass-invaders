@@ -50,6 +50,7 @@ namespace CandyCruisers.Editor
             CheckPauseButtonPlatform();
             CheckMainMenuTitle();
             CheckMenuEyeTrackingDelay();
+            CheckMenuGazeAnimation();
             CheckMenuIntroSkip();
             CheckLevelSelectUnlock();
             CheckLevelSelectTouches();
@@ -227,11 +228,21 @@ namespace CandyCruisers.Editor
                 !SameColor(firstCharacterColor, GameSession.MainMenuCharacterColor(1f)) &&
                 SameColor(GameSession.MainMenuCharacterColor(1f), new Color(1f, .025f, .04f)),
                 "Menu character holds a saturated color through the pulse and switches directly to the next color");
-            var desktopEyeTarget = GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90);
+            var characterBody = new Rect(40, 20, 40, 30);
+            var desktopEyeTarget = GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90, characterBody);
             Check(desktopEyeTarget.HasValue && desktopEyeTarget.Value == new Vector2(60, 10) &&
-                !GameSession.MenuEyeTargetFor(true, true, new Vector2(120, 160), 2, 90).HasValue &&
-                !GameSession.MenuEyeTargetFor(false, false, new Vector2(120, 160), 2, 90).HasValue,
+                !GameSession.MenuEyeTargetFor(true, true, new Vector2(120, 160), 2, 90, characterBody).HasValue &&
+                !GameSession.MenuEyeTargetFor(false, false, new Vector2(120, 160), 2, 90, characterBody).HasValue,
                 "Menu eyes only track a computer mouse");
+            foreach (float scale in new[] { 1f, 2f, 3f })
+            foreach (float x in new[] { 0f, characterBody.center.x, 200f })
+            {
+                Vector2 MouseAt(float y) => new Vector2(x, 90 - y) * scale;
+                Check(GameSession.MenuEyeTargetFor(false, true, MouseAt(characterBody.center.y - 1), scale, 90, characterBody).HasValue &&
+                    !GameSession.MenuEyeTargetFor(false, true, MouseAt(characterBody.center.y), scale, 90, characterBody).HasValue &&
+                    !GameSession.MenuEyeTargetFor(false, true, MouseAt(characterBody.center.y + 1), scale, 90, characterBody).HasValue,
+                    "Menu eyes follow only above the character's midsection, across cursor columns and display scales");
+            }
             var eye = new GameObject("Pupil", typeof(SpriteRenderer)).GetComponent<SpriteRenderer>();
             var mouth = new GameObject("Smile", typeof(SpriteRenderer)).GetComponent<SpriteRenderer>();
             try
@@ -348,7 +359,7 @@ namespace CandyCruisers.Editor
                     Func<bool> activate = () => key != KeyCode.None ? session.HandleMenuKey(key) :
                         (bool)typeof(GameSession).GetMethod("ActivateMenuTouch",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                            .Invoke(session, new object[] { new Vector2(10, 10) });
+                            .Invoke(session, new object[] { new Vector2(Screen.width / 2f, Screen.height / 2f) });
                     Check(activate(), "Keyboard and shared tap/click activation are consumed");
                     if (elapsed < MenuIntroAnimation.Duration)
                     {
@@ -501,13 +512,13 @@ namespace CandyCruisers.Editor
                     var music = grid.GetComponent<GameplayMusicPlayer>();
                     float measure = music.SecondsForBeats(GameplayMusicPlayer.BeatsPerMeasure);
                     Check(!session.MenuEyeTrackingReady &&
-                        !GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90, false).HasValue,
+                        !GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90, new Rect(40, 20, 40, 30), false).HasValue,
                         "Menu eyes hold still when the animation first finishes");
                     session.Tick(Mathf.Max(0, measure * .75f));
                     Check(!session.MenuEyeTrackingReady, "Menu eyes wait through the first three beats of the measure");
                     session.Tick(Mathf.Max(.002f, measure * .25f + .002f));
                     Check(session.MenuEyeTrackingReady &&
-                        GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90, true).HasValue,
+                        GameSession.MenuEyeTargetFor(false, true, new Vector2(120, 160), 2, 90, new Rect(40, 20, 40, 30), true).HasValue,
                         "Menu eyes begin following the mouse after a full four-four measure");
                 }
                 finally
@@ -689,6 +700,61 @@ namespace CandyCruisers.Editor
                     var shifted = new Rect(pupil.position + new Vector2(3, 7), pupil.size);
                     Check(GameSession.MenuEyeFollowRect(shifted, eye, cursor) == followed,
                         "Existing gameplay gaze cannot bias the title-screen cursor tracking");
+                }
+            }
+        }
+
+        private static void CheckMenuGazeAnimation()
+        {
+            var eye = new Rect(200, 300, 24, 24);
+            var gaze = new MenuGazeAnimation();
+            Check(gaze.DirectionFor(eye) == Vector2.zero, "Menu resting gaze starts by looking directly at the player");
+            gaze.Tick(.5f, eye.center + Vector2.right * 300);
+            var tracking = gaze.DirectionFor(eye);
+            gaze.Tick(1f / 60, null);
+            var returning = gaze.DirectionFor(eye);
+            Check(tracking.x > .99f && returning.x > .5f && returning.x < tracking.x && returning.y == 0,
+                "Losing the mouse target eases out of the tracked gaze instead of snapping to rest");
+            gaze.Tick(.6f, null);
+            Check(gaze.DirectionFor(eye).magnitude < .003f, "Menu eyes settle back into direct eye contact");
+            gaze.Reset();
+            Check(gaze.DirectionFor(eye) == Vector2.zero, "Restarting the menu entrance clears the previous gaze");
+
+            int centered = 0;
+            bool up = false, left = false, right = false;
+            var previous = Vector2.zero;
+            for (int frame = 0; frame <= MenuGazeAnimation.IdleCycleSeconds * 60; frame++)
+            {
+                var direction = MenuGazeAnimation.IdleDirectionFor(frame / 60f);
+                if (direction == Vector2.zero) centered++;
+                up |= direction.y < -.7f;
+                left |= direction.x < -.7f;
+                right |= direction.x > .7f;
+                Check(direction.magnitude <= 1 && Vector2.Distance(direction, previous) < .065f,
+                    "Idle glances stay within the eyes and transition continuously, including the cycle boundary");
+                previous = direction;
+            }
+            Check(centered > MenuGazeAnimation.IdleCycleSeconds * 60 * .75f && up && left && right,
+                "Menu eyes spend most of their idle time facing the player, with occasional upward and side glances");
+
+            foreach (bool mobile in new[] { false, true })
+            {
+                Vector2? expected = null;
+                foreach (int frameRate in new[] { 30, 60, 120 })
+                {
+                    gaze.Reset();
+                    var target = GameSession.MenuEyeTargetFor(mobile, true, new Vector2(600, 800), 1, 900,
+                        new Rect(200, 300, 40, 30));
+                    for (int frame = 0; frame < frameRate; frame++) gaze.Tick(1f / frameRate, target);
+                    for (int frame = 0; frame < frameRate * 3 / 10; frame++) gaze.Tick(1f / frameRate, null);
+                    var direction = gaze.DirectionFor(eye);
+                    if (expected.HasValue)
+                        Check(Vector2.Distance(direction, expected.Value) < .0001f,
+                            "Desktop gaze returns and phone idle animation agree at 30, 60 and 120 frames per second");
+                    expected = direction;
+                    gaze.Tick(6.5f, null);
+                    Check(gaze.DirectionFor(eye).y < -.79f,
+                        "Upward idle glances continue with desktop mouse tracking disabled or phone touch input active");
                 }
             }
         }

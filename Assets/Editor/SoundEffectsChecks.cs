@@ -26,6 +26,7 @@ namespace CandyCruisers.Editor
         [MenuItem("Candy Cruisers/Run Sound Checks")]
         public static void Run()
         {
+            using var songs = new SongSelectionCheckSettings();
             using var metronomes = new MetronomeCheckSettings();
             CheckClips();
             CheckTongue();
@@ -263,11 +264,10 @@ namespace CandyCruisers.Editor
                     typeof(GameSession).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                         .Invoke(session, null);
                     var music = grid.GetComponent<GameplayMusicPlayer>();
-                    var disco = Resources.Load<AudioClip>("DiscoDescent");
-                    if (disco != null)
-                        Check(music.MenuTrack == disco && music.Source.clip == disco,
-                            "Every fresh menu starts with the temporary Disco Descent lock");
                     if (!HasBundledSoundtrack()) return;
+                    Check(music.MenuTrack != null && music.ContainsTrack(music.MenuTrack.name) &&
+                        music.Source.clip == music.MenuTrack,
+                        "Every fresh menu plays its selected soundtrack song");
 
                     var songs = new System.Collections.Generic.HashSet<string> { music.MenuTrack.name };
                     for (int i = 1; i < music.TrackCount; i++)
@@ -278,7 +278,7 @@ namespace CandyCruisers.Editor
                         music.UpdatePlayback();
                         Check(session.State == GameSession.RunState.MainMenu && !session.MenuArriving &&
                             music.Source.clip == selected && music.MenuTrack == selected && music.Source.loop,
-                            "Skipping stays on the menu and the temporary lock does not undo the selected song");
+                            "Skipping stays on the menu and preserves the selected song");
                     }
                     var last = music.Source.clip;
                     Check(music.SkipCurrentSong() && music.Source.clip != last,
@@ -290,7 +290,7 @@ namespace CandyCruisers.Editor
                     Check(music.Source.clip == carried && music.Track == carried && !music.Source.loop,
                         "Starting gameplay carries the song selected by the menu shortcut");
                 });
-            Debug.Log("Menu music checks passed: temporary Disco Descent start, shuffle skips, menu state and gameplay carryover.");
+            Debug.Log("Menu music checks passed: random soundtrack start, shuffle skips, menu state and gameplay carryover.");
         }
 
         private static void CheckSeamlessMenuMusic()
@@ -462,9 +462,11 @@ namespace CandyCruisers.Editor
                         Check(!music.SkipCurrentSong(), "Developer skip stays unavailable without local soundtrack resources");
                         session.Pause(); session.Resume();
                     }
+                    // Apply any pending shuffle transition before checking the active clip's
+                    // loading state; an asynchronous replacement is not a finished song.
+                    music.UpdatePlayback();
                     if (HasBundledSoundtrack() && Application.isPlaying && music.Source.clip.loadState == AudioDataLoadState.Loaded)
                     {
-                        music.UpdatePlayback();
                         var finished = music.Source.clip;
                         music.Source.Stop();
                         music.UpdatePlayback(); music.UpdatePlayback();
@@ -550,10 +552,10 @@ namespace CandyCruisers.Editor
                         "Music is fully stopped at the blackout boundary before any shatter");
                     session.Tick(PlayerDeathBurst.ShatterSoundSeconds + .001f);
                     var shatter = grid.GetComponent<SoundEffects>().GetClip(SoundEffect.PlayerShatter);
-                    Check(Array.Exists(grid.GetComponentsInChildren<AudioSource>(), voice =>
-                        voice.clip == shatter && voice != source && voice.pitch == 1),
-                        "The shatter uses its own full-speed voice, unaffected by the slowed music");
-                    session.Tick(PlayerFatalDustBurst.Duration);
+                    Check(!Array.Exists(grid.GetComponentsInChildren<AudioSource>(), voice =>
+                        voice.clip == shatter && voice != source),
+                        "Final death melts quietly without an explosion voice");
+                    session.Tick(PlayerMeltDeath.Duration);
                     music.UpdatePlayback(); music.UpdatePlayback();
                     Check(session.State == GameSession.RunState.GameOver && !source.isPlaying && source.volume == 0 && source.pitch == 1,
                         "Game over stays silent and clears the music-only pitch override");

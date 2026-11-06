@@ -11,6 +11,7 @@ namespace CandyCruisers.Editor
         {
             CheckOverlappingWave();
             CheckBarUnlockTransition();
+            CheckLostBars();
             var random = UnityEngine.Random.state;
             var sizes = Enumerable.Range(0, 4096).Select(_ => EnemyPlaceholderArt.RandomDustSize(.55f)).ToArray();
             Check(sizes.All(size => size >= .055f && size <= .16f) && sizes.Count(size => size >= .11f) > sizes.Length * .6f,
@@ -168,6 +169,81 @@ namespace CandyCruisers.Editor
                 CheckStreamTiming(source, player);
             });
             Debug.Log("Color-clear celebration checks passed: constant-speed dust streams, staggered absorption, larger grains, frame timing, final-color triggers, bars and tones.");
+        }
+
+        private static void CheckLostBars()
+        {
+            foreach (bool damage in new[] { false, true })
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var session = grid.gameObject.AddComponent<GameSession>(); session.Configure(player);
+                if (!Application.isPlaying) typeof(GameSession).GetMethod("OnEnable",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(session, null);
+                var red = ProgressionChecks.Add(grid, EnemyColor.Red, 0, 0);
+                ProgressionChecks.Add(grid, EnemyColor.Blue, 4, 0);
+                grid.ClearMatchingChain(red.Id, EnemyColor.Red);
+                int cues = 0;
+                grid.GetComponent<SoundEffects>().CuePlayed += (cue, pitch) =>
+                { if (cue == SoundEffect.BarPowerDown) cues++; };
+                bool invincible = DeveloperOptions.PlayerInvincible;
+                try
+                {
+                    DeveloperOptions.PlayerInvincible = false;
+                    if (damage) Check(player.Hit(true), "Damage fixture accepts a player hit");
+                    else
+                    {
+                        player.transform.position = new Vector3(-2.9f, -4.6f, 0);
+                        Check(player.Fire() && tongue.IsMagic && cues == 0,
+                            "Spending magic waits for the shot outcome before powering down bars");
+                        tongue.Tick(10, grid);
+                    }
+                    Check(cues == 1 && session.LostBarAnimation.SimultaneousPowerDown && !grid.HasColorClearBar(EnemyColor.Red),
+                        "A missed magic shot or player hit powers down the lost bars exactly once");
+                }
+                finally { DeveloperOptions.PlayerInvincible = invincible; }
+            });
+            foreach (float step in new[] { 1f / 30, 1f / 60, 1f / 120, .5f })
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var session = grid.gameObject.AddComponent<GameSession>(); session.Configure(player);
+                if (!Application.isPlaying) typeof(GameSession).GetMethod("OnEnable",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(session, null);
+                grid.GetComponent<GameplayMusicPlayer>().StopPlayback();
+                int powerDownCues = 0;
+                grid.GetComponent<SoundEffects>().CuePlayed += (cue, pitch) =>
+                { if (cue == SoundEffect.BarPowerDown) powerDownCues++; };
+                var red = ProgressionChecks.Add(grid, EnemyColor.Red, 0, 0);
+                var green = ProgressionChecks.Add(grid, EnemyColor.Green, 2, 0);
+                ProgressionChecks.Add(grid, EnemyColor.Blue, 4, 0);
+                grid.ClearMatchingChain(red.Id, EnemyColor.Red);
+                grid.ClearMatchingChain(green.Id, EnemyColor.Green);
+                grid.ResetColorClearStreak();
+                Check(powerDownCues == 1 && session.LostBarAnimation.SimultaneousPowerDown &&
+                    session.LostBarAnimation.Visible(EnemyColor.Red) && session.LostBarAnimation.Visible(EnemyColor.Green) &&
+                    !session.LostBarAnimation.Visible(EnemyColor.Blue),
+                    "Losing the streak powers down exactly the earned bars with the partial-stage sound");
+                Check(grid.Fleet.ClearedColorCount == 0 && session.State == GameSession.RunState.Playing && !session.ClearCelebration.Active,
+                    "Power-down releases spawn locks immediately and keeps gameplay running");
+                grid.ResetColorClearStreak();
+                Check(powerDownCues == 1, "Resetting an empty streak cannot repeat its sound");
+                var slot = new Rect(20, 500, 80, 5);
+                session.Tick(step);
+                Check(session.DisplayedColorClearBarRect(EnemyColor.Red, slot, 0, 0).height > slot.height,
+                    "Lost bars retain the shared partial-stage rise and fall while no longer logically powered");
+                var progress = session.LostBarAnimation.PowerDownProgress;
+                session.Pause(); session.Tick(10);
+                Check(session.LostBarAnimation.PowerDownProgress == progress, "Pause freezes lost-bar power-down");
+                session.Resume();
+                // Re-earning a bar during the fade takes precedence over the old loss snapshot.
+                var returningRed = ProgressionChecks.Add(grid, EnemyColor.Red, 0, 1);
+                grid.ClearMatchingChain(returningRed.Id, EnemyColor.Red);
+                Check(grid.HasColorClearBar(EnemyColor.Red) &&
+                    session.DisplayedColorClearBarRect(EnemyColor.Red, slot, 0, 0).width > slot.width,
+                    "A newly earned bar immediately replaces its previous power-down");
+                for (float time = 0; time < 3; time += step) session.Tick(step);
+                Check(!session.LostBarAnimation.Active && grid.HasColorClearBar(EnemyColor.Red),
+                    "Power-down finishes at every frame rate without removing newly earned progress");
+            });
         }
 
         private static void CheckOverlappingWave()

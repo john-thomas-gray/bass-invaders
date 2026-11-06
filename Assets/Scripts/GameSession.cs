@@ -28,7 +28,6 @@ namespace CandyCruisers
         private PresentationCue deathCue;
         private bool hasDeathCue;
         private float deathElapsed;
-        private bool deathShattered;
         private bool deathAnimationStarted;
         private GameOverBlackout blackout;
         private static bool startAfterReload;
@@ -45,10 +44,25 @@ namespace CandyCruisers
         private int inputBlockedThrough = -1;
         private bool started;
         public bool IsPaused { get; private set; }
+        public SongSelectionMenu SongSelection { get; } = new SongSelectionMenu();
+        public bool SongSelectionMenuAvailable => !OpeningWarningActive && !MenuArriving && !MetronomeMenuOpen &&
+            (IsPaused || State == RunState.MainMenu && menuTitleElapsed >= MenuWordIntroDuration);
+        private SongSelectionMenu.Layout SongMenuLayout => new SongSelectionMenu.Layout(
+            new Vector2(Screen.width, Screen.height), Screen.safeArea, GuiScale, MobileMenuActive);
         public bool MetronomeMenuOpen { get; private set; }
         public bool MetronomeMenuAvailable => IsPaused && !OpeningWarningActive;
         public bool VisualMetronomeVisible => MetronomeSettings.VisualEnabled && !OpeningWarningActive &&
             (State == RunState.Playing || State == RunState.Refilling) && !IsPaused;
+        public bool RoundClockVisible => MetronomeSettings.RoundClockEnabled && !OpeningWarningActive &&
+            (State == RunState.Playing || State == RunState.Refilling) && !IsPaused;
+        public double ElapsedRoundSeconds { get; private set; }
+        public string RoundClockText => FormatRoundTime(ElapsedRoundSeconds);
+        public static string FormatRoundTime(double seconds)
+        {
+            long wholeSeconds = (long)System.Math.Floor(System.Math.Max(0, seconds));
+            return (wholeSeconds / 60).ToString("00", System.Globalization.CultureInfo.InvariantCulture) + ":" +
+                (wholeSeconds % 60).ToString("00", System.Globalization.CultureInfo.InvariantCulture);
+        }
         public bool PresentationPreview { get; set; }
         public bool OpeningWarningActive => Application.isPlaying && !PresentationPreview && !epilepsyWarningShown &&
             epilepsyWarningElapsed < EpilepsyWarningSeconds;
@@ -86,6 +100,7 @@ namespace CandyCruisers
         private float menuEyeDelayElapsed;
         private float menuEyeDelaySeconds;
         private bool menuEyeDelayStarted;
+        private readonly MenuGazeAnimation menuGaze = new MenuGazeAnimation();
         private Rect menuDeparture;
         public bool MenuEyeTrackingReady => !MenuArriving && menuTitleElapsed >= MenuWordIntroDuration &&
             menuEyeDelayStarted && menuEyeDelayElapsed >= menuEyeDelaySeconds;
@@ -98,6 +113,7 @@ namespace CandyCruisers
             menuTitleElapsed = menuArrivalElapsed = 0;
             menuEyeDelayElapsed = menuEyeDelaySeconds = 0;
             menuEyeDelayStarted = false;
+            menuGaze.Reset();
             MenuArriving = false;
             menuDeparture = default;
         }
@@ -135,6 +151,8 @@ namespace CandyCruisers
         };
         public RunState State { get; private set; }
         public RunProgress Progress { get; } = new RunProgress();
+        public bool IsAutomatedPlaytest { get; internal set; }
+        public bool PlaytestPanelOpen { get; internal set; }
         public FleetState Fleet => (grid != null ? grid : GetComponent<EnemyGrid>())?.Fleet;
         [SerializeField, HideInInspector] private TextAsset levelMap;
         private LevelCatalog levelCatalog;
@@ -147,6 +165,7 @@ namespace CandyCruisers
         }
         public LevelDefinition CurrentLevelDefinition => levelCatalog != null ? levelCatalog.ForLevel(Progress.Level) : null;
         public event System.Action WaveSpawned;
+        public event System.Action<int, int, bool, bool> CombatResolved;
         public int LastLeaderboardRank { get; private set; }
         public Color ProgressBarColor => player != null ? player.AccentColor : Color.gray;
         public const float ComboMilestoneAnimationSeconds = 1.1f;
@@ -198,20 +217,50 @@ namespace CandyCruisers
                 style.CalcSize(content).y * GameplayTextMaxPulseScale > rect.height)) style.fontSize--;
         }
 
-        private static void DrawGameplayText(Rect rect, string text, GUIStyle style, Color tint, float opacity, float beat)
+        private void DrawGameplayText(Rect rect, string text, GUIStyle style, Color tint, float opacity, float beat)
         {
             FitGameplayText(style, text, rect);
+            float restingAnchorX = style.alignment == TextAnchor.MiddleLeft ? rect.xMin :
+                style.alignment == TextAnchor.MiddleRight ? rect.xMax : rect.center.x;
+            rect = InsetGrowingText(rect, text, style, new Vector2(restingAnchorX, rect.center.y), GameplayTextMaxPulseScale);
             var previousMatrix = GUI.matrix;
             var previousColor = GUI.color;
             float anchorX = style.alignment == TextAnchor.MiddleLeft ? rect.xMin :
                 style.alignment == TextAnchor.MiddleRight ? rect.xMax : rect.center.x;
             GUIUtility.ScaleAroundPivot(Vector2.one * GameplayTextPulseScale(beat), new Vector2(anchorX, rect.center.y));
+            GUI.matrix = MagicPowerPresentation.ElementMatrix(GUI.matrix, GameplayLabelBounds(rect, text, style), MagicTextGrowthScale);
             GUI.color = new Color(0, 0, 0, .7f * opacity);
             GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), text, style);
             GUI.color = new Color(tint.r, tint.g, tint.b, opacity);
             GUI.Label(rect, text, style);
             GUI.color = previousColor;
             GUI.matrix = previousMatrix;
+        }
+
+        private Rect InsetGrowingText(Rect rect, string text, GUIStyle style, Vector2 anchor, float originalPeak = 1)
+        {
+            var safe = MetronomeSafeRect(new Vector2(Screen.width, Screen.height), Screen.safeArea, GuiScale);
+            safe = new Rect(safe.x + 4, safe.y + 4, Mathf.Max(0, safe.width - 8), Mathf.Max(0, safe.height - 8));
+            rect.position += MagicPowerPresentation.PeakTextInset(GameplayLabelBounds(rect, text, style), safe, anchor, originalPeak);
+            return rect;
+        }
+
+        private static Rect GameplayLabelBounds(Rect rect, string text, GUIStyle style)
+        {
+            var content = new GUIContent(text);
+            var size = style.CalcSize(content);
+            size.x = Mathf.Min(size.x, rect.width);
+            size.y = Mathf.Min(style.wordWrap ? style.CalcHeight(content, rect.width) : size.y, rect.height);
+            int horizontal = (int)style.alignment % 3, vertical = (int)style.alignment / 3;
+            return new Rect(horizontal == 0 ? rect.xMin : horizontal == 2 ? rect.xMax - size.x : rect.center.x - size.x / 2,
+                vertical == 0 ? rect.yMin : vertical == 2 ? rect.yMax - size.y : rect.center.y - size.y / 2, size.x, size.y);
+        }
+
+        private Matrix4x4 BeginMagicText(Rect rect)
+        {
+            var previous = GUI.matrix;
+            GUI.matrix = MagicPowerPresentation.ElementMatrix(previous, rect, MagicTextGrowthScale);
+            return previous;
         }
         private bool accumulatingShotScore;
         private long shotScore;
@@ -271,10 +320,13 @@ namespace CandyCruisers
         }
         public Rect DisplayedColorClearBarRect(EnemyColor color, Rect resting, float beat, int slot)
         {
+            if (!grid.HasColorClearBar(color) && LostBarAnimation.Active && LostBarAnimation.Visible(color))
+                return LostBarAnimation.Present(color, resting);
             if (ClearCelebration.Active && !ClearCelebration.Waiting) return ClearCelebration.Present(color, resting);
             return ColorClearBarLevelRect(clearBarAnimation.Present(color, resting), beat, slot);
         }
         public FullSetCelebration ClearCelebration { get; } = new FullSetCelebration();
+        public FullSetCelebration LostBarAnimation { get; } = new FullSetCelebration();
         private bool partialClearCelebration;
         private int rewardedLifeSlot = -1;
         private int refillPostBarBeats = 1;
@@ -314,6 +366,13 @@ namespace CandyCruisers
             soundEffects?.PlayCue(SoundEffect.ColorClear, ColorClearBarAnimation.TonePitch(bars));
             if (grid.AllColorClearBarsFilled) soundEffects?.PlayCue(SoundEffect.Jackpot);
         }
+        private void OnColorClearStreakReset(List<EnemyColor> colors)
+        {
+            if (State != RunState.Playing || colors.Count == 0) return;
+            float duration = CurrentBeatDuration;
+            LostBarAnimation.Begin(colors, duration: duration, simultaneousPowerDown: true);
+            soundEffects?.PlayCueForDuration(SoundEffect.BarPowerDown, duration);
+        }
         private void OnMatchCleared(int count, bool fleetCleared, int scoreWeight)
             => AwardClear(count, fleetCleared, scoreWeight, true);
         private void OnMatchColorScored(EnemyColor color)
@@ -329,6 +388,7 @@ namespace CandyCruisers
             long basePoints = (100L + 10L * (before - 1)) * scoreWeight;
             long fleetBonus = fleetCleared ? 10000L * before : 0;
             long earned = Progress.RegisterClear(count, fleetCleared, scoreWeight, applyCombo);
+            CombatResolved?.Invoke(before, count, fleetCleared, applyCombo);
             long previousPoints = 0;
             if (applyCombo && accumulatingShotScore)
             {
@@ -338,7 +398,7 @@ namespace CandyCruisers
             feedback = ScoreCalculation(basePoints, combo, fleetBonus, previousPoints);
             if (Progress.Level > before)
             {
-                if (!PresentationPreview) RecordReachedLevel(Progress.Level);
+                if (!PresentationPreview && !IsAutomatedPlaytest) RecordReachedLevel(Progress.Level);
                 soundEffects?.PlayCue(SoundEffect.LevelUp);
                 feedback += "  /  Level " + Progress.Level;
                 foreach (EnemyColor color in System.Enum.GetValues(typeof(EnemyColor)))
@@ -363,9 +423,21 @@ namespace CandyCruisers
             player = controller;
             SubscribeToPlayer();
         }
+        internal PlayerMovement Player => player;
+        public float MagicTextGrowthScale => MagicGrowthScale();
+        public float MagicGrowthScale(bool offbeat = false) => State == RunState.Playing || State == RunState.Refilling ?
+            MagicPowerPresentation.TextGrowthScale(player != null ? player.ActiveMagicBars : 0,
+                musicPlayer != null ? musicPlayer.BeatPosition : Time.time / FullSetCelebration.StepDuration, offbeat) : 1;
         private void Start()
         {
             started = true;
+            if (Camera.main != null)
+            {
+                var magic = Camera.main.GetComponent<MagicPowerPresentation>();
+                if (magic == null) magic = Camera.main.gameObject.AddComponent<MagicPowerPresentation>();
+                magic.Configure(this, player);
+            }
+            if (Application.isPlaying && DeveloperOptions.Available) PlaytestHarness.Attach(this, player);
             if (grid.Fleet.Count == 0 && State == RunState.Playing)
             {
                 bool start = startAfterReload;
@@ -376,6 +448,7 @@ namespace CandyCruisers
                 menuTitleElapsed = 0;
                 menuEyeDelayElapsed = menuEyeDelaySeconds = 0;
                 menuEyeDelayStarted = false;
+                menuGaze.Reset();
                 FirstLaunchIntro = !PresentationPreview && PlayerPrefs.GetInt(MenuIntroSeenKey, 0) == 0;
                 MenuEntrance = FirstLaunchIntro ? MenuIntroAnimation.Entrance.TractorBeam :
                     (MenuIntroAnimation.Entrance)Random.Range(0, 3);
@@ -389,6 +462,7 @@ namespace CandyCruisers
         {
             if (State != RunState.MainMenu) return;
             MetronomeMenuOpen = false;
+            SongSelection.Close();
             LoadLevelMap();
             if (levelMapError != null) { Debug.LogError(levelMapError, this); return; }
             Progress.LevelCatalog = levelCatalog;
@@ -405,11 +479,14 @@ namespace CandyCruisers
             inputBlockedThrough = Time.frameCount + 1;
             leaderboardRecorded = false;
             gameOverElapsed = 0;
+            ElapsedRoundSeconds = 0;
             LastLeaderboardRank = 0;
             menuLevelDigits = "";
-            if (!PresentationPreview) SetSelectableStartLevel(StartLevel);
+            if (!PresentationPreview && !IsAutomatedPlaytest) SetSelectableStartLevel(StartLevel);
+            GetComponent<PlaytestHarness>()?.PrepareRun();
             Progress.Reset(StartLevel);
             Fleet.ResetCycle();
+            LostBarAnimation.Reset();
             spawner.ResetSequences();
             clearBarAnimation.Reset();
             accumulatingShotScore = false;
@@ -417,6 +494,7 @@ namespace CandyCruisers
             rewardedLifeSlot = -1;
             ResetComboPresentation();
             if (player != null) player.ResetForRun();
+            GetComponent<PlaytestHarness>()?.BeginRecording();
             State = RunState.Playing;
             musicPlayer?.UpdatePlayback();
             BeginBatch(spawner.PlanNextFleet(),
@@ -436,6 +514,7 @@ namespace CandyCruisers
         public void Resume()
         {
             MetronomeMenuOpen = false;
+            SongSelection.Close();
             if (!IsPaused) return;
             IsPaused = false;
             Time.timeScale = previousTimeScale;
@@ -444,7 +523,7 @@ namespace CandyCruisers
             Suspend(State != RunState.Playing);
             musicPlayer?.UpdatePlayback();
         }
-        private void OnApplicationFocus(bool focused) { if (!PresentationPreview && started && !focused) Pause(); }
+        private void OnApplicationFocus(bool focused) { if (!PresentationPreview && started && !focused && !IsAutomatedPlaytest) Pause(); }
         private void OnApplicationPause(bool paused) { if (!PresentationPreview && started && paused) Pause(); }
         private Rect PauseButton
         {
@@ -487,11 +566,13 @@ namespace CandyCruisers
             grid.MatchColorScored += OnMatchColorScored;
             grid.OrangeBurstCleared += OnOrangeBurstCleared;
             grid.ColorCleared += OnColorCleared;
+            grid.ColorClearStreakReset += OnColorClearStreakReset;
             SubscribeToPlayer();
         }
         private void OnDisable()
         {
             ClearCelebration.Reset();
+            LostBarAnimation.Reset();
             Fleet?.Reserve(null);
             clearBarAnimation.Reset();
             ClearCelebration.BarStarted -= OnCelebrationBarStarted;
@@ -504,6 +585,7 @@ namespace CandyCruisers
             if (grid != null) grid.MatchColorScored -= OnMatchColorScored;
             if (grid != null) grid.OrangeBurstCleared -= OnOrangeBurstCleared;
             if (grid != null) grid.ColorCleared -= OnColorCleared;
+            if (grid != null) grid.ColorClearStreakReset -= OnColorClearStreakReset;
             UnsubscribeFromPlayer();
             musicPlayer?.StopPlayback();
         }
@@ -571,13 +653,14 @@ namespace CandyCruisers
         private void Update()
         {
             if (PresentationPreview) { Tick(Time.deltaTime); return; }
+            if (PlaytestPanelOpen) { Tick(Time.deltaTime); return; }
             if (OpeningWarningActive || IsPaused || State == RunState.MainMenu || State == RunState.GameOver)
                 foreach (var touch in Input.touches)
                     if (touch.phase == TouchPhase.Ended && ActivateMenuTouch(touch.position)) return;
             if ((OpeningWarningActive || State == RunState.GameOver || State == RunState.MainMenu) && Input.touchCount == 0 && Input.GetMouseButtonUp(0) &&
                 ActivateMenuTouch(Input.mousePosition)) return;
             if (IsPaused && Input.touchCount == 0 && Input.GetMouseButtonUp(0) &&
-                TryActivateMetronomeMenu(MenuPointFromScreen(Input.mousePosition, new Vector2(Screen.width, Screen.height), MobileMenuActive),
+                TryActivateOptionsMenu(MenuPointFromScreen(Input.mousePosition, new Vector2(Screen.width, Screen.height), MobileMenuActive),
                     new Vector2(Screen.width, Screen.height), Screen.safeArea, MobileMenuActive)) return;
             foreach (var key in MenuKeys)
                 if (Input.GetKeyDown(key) && HandleMenuKey(key)) return;
@@ -586,7 +669,8 @@ namespace CandyCruisers
 
         private static readonly KeyCode[] MenuKeys = { KeyCode.P, KeyCode.Escape, KeyCode.Return,
             KeyCode.KeypadEnter, KeyCode.Space, KeyCode.R, KeyCode.M, KeyCode.LeftArrow, KeyCode.RightArrow,
-            KeyCode.I, KeyCode.F9, KeyCode.F10, KeyCode.Alpha0, KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
+            KeyCode.S, KeyCode.UpArrow, KeyCode.DownArrow,
+            KeyCode.I, KeyCode.F7, KeyCode.F9, KeyCode.F10, KeyCode.Alpha0, KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
             KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9,
             KeyCode.Keypad0, KeyCode.Keypad1, KeyCode.Keypad2, KeyCode.Keypad3, KeyCode.Keypad4,
             KeyCode.Keypad5, KeyCode.Keypad6, KeyCode.Keypad7, KeyCode.Keypad8, KeyCode.Keypad9 };
@@ -601,11 +685,19 @@ namespace CandyCruisers
                 return true;
             }
             if (State == RunState.Dying || State == RunState.GameOver && !GameOverTitleReady) return false;
-            if (key == KeyCode.F9 || key == KeyCode.F10)
+            if (SongSelection.IsOpen) return SongSelection.HandleKey(key, musicPlayer, SongMenuLayout);
+            if (key == KeyCode.S && SongSelectionMenuAvailable)
+            {
+                SongSelection.Open();
+                player?.CancelPointer();
+                return true;
+            }
+            if (key == KeyCode.F7 || key == KeyCode.F9 || key == KeyCode.F10)
             {
                 if (!MetronomeMenuAvailable) return false;
                 if (key == KeyCode.F9) musicPlayer?.SetVoiceMetronome(!MetronomeSettings.VoiceEnabled);
-                else MetronomeSettings.VisualEnabled = !MetronomeSettings.VisualEnabled;
+                else if (key == KeyCode.F10) MetronomeSettings.VisualEnabled = !MetronomeSettings.VisualEnabled;
+                else MetronomeSettings.RoundClockEnabled = !MetronomeSettings.RoundClockEnabled;
                 return true;
             }
             if (MetronomeMenuOpen)
@@ -678,6 +770,9 @@ namespace CandyCruisers
                 DismissOpeningWarning();
                 return true;
             }
+            var screen = new Vector2(Screen.width, Screen.height);
+            if (TryActivateSongSelection(MenuPointFromScreen(point, screen, MobileMenuActive), screen, Screen.safeArea, MobileMenuActive)) return true;
+            if (GetComponent<PlaytestHarness>()?.TryOpenPanelAtScreenPoint(point) == true) return true;
             if (State == RunState.MainMenu)
                 return ActivateMainMenuTouch(point, new Vector2(Screen.width, Screen.height), MobileMenuActive);
             point = MenuPointFromScreen(point, new Vector2(Screen.width, Screen.height), MobileMenuActive);
@@ -735,6 +830,24 @@ namespace CandyCruisers
 
         private static void TogglePlayerInvincible() => DeveloperOptions.PlayerInvincible = !DeveloperOptions.PlayerInvincible;
 
+        private bool TryActivateOptionsMenu(Vector2 point, Vector2 screen, Rect safe, bool mobile) =>
+            TryActivateSongSelection(point, screen, safe, mobile) || TryActivateMetronomeMenu(point, screen, safe, mobile);
+
+        private bool TryActivateSongSelection(Vector2 point, Vector2 screen, Rect safe, bool mobile)
+        {
+            if (!SongSelectionMenuAvailable || musicPlayer == null) return false;
+            float scale = GuiScaleFor(mobile, screen.x, screen.y);
+            if (SongSelection.IsOpen)
+            {
+                SongSelection.Activate(point, musicPlayer, new SongSelectionMenu.Layout(screen, safe, scale, mobile));
+                return true;
+            }
+            if (!SongSelectionMenu.ButtonRect(screen, safe, scale, mobile).Contains(point)) return false;
+            SongSelection.Open();
+            player?.CancelPointer();
+            return true;
+        }
+
         private bool TryActivateMetronomeMenu(Vector2 point, Vector2 screen, Rect safe, bool mobile)
         {
             if (!MetronomeMenuAvailable) return false;
@@ -746,7 +859,9 @@ namespace CandyCruisers
                     musicPlayer?.SetVoiceMetronome(!MetronomeSettings.VoiceEnabled);
                 else if (MetronomeMenuRowRect(panel, 1).Contains(point))
                     MetronomeSettings.VisualEnabled = !MetronomeSettings.VisualEnabled;
-                else if (MetronomeMenuRowRect(panel, 2).Contains(point)) MetronomeMenuOpen = false;
+                else if (MetronomeMenuRowRect(panel, 2).Contains(point))
+                    MetronomeSettings.RoundClockEnabled = !MetronomeSettings.RoundClockEnabled;
+                else if (MetronomeMenuRowRect(panel, 3).Contains(point)) MetronomeMenuOpen = false;
                 return true;
             }
             if (!MetronomeMenuButtonRect(screen, safe, scale, mobile).Contains(point)) return false;
@@ -765,7 +880,7 @@ namespace CandyCruisers
 
         public void Tick(float seconds)
         {
-            if (IsPaused) return;
+            if (IsPaused || SongSelection.IsOpen) return;
             if (OpeningWarningActive)
             {
                 epilepsyWarningElapsed = Mathf.Min(EpilepsyWarningSeconds,
@@ -779,6 +894,7 @@ namespace CandyCruisers
                 float elapsed = Mathf.Max(0, seconds);
                 if (MenuArriving)
                 {
+                    menuGaze.Tick(elapsed, null);
                     menuArrivalElapsed += elapsed;
                     if (MenuArrivalProgress >= 1)
                     {
@@ -794,7 +910,11 @@ namespace CandyCruisers
                     float afterIntro = Mathf.Max(0, elapsed -
                         Mathf.Max(0, MenuWordIntroDuration - previousTitleElapsed));
                     if (menuTitleElapsed >= MenuWordIntroDuration)
+                    {
                         TickMenuEyeTrackingDelay(afterIntro);
+                        menuGaze.Tick(afterIntro, MenuEyeTrackingReady && !MobileMenuActive && Input.mousePresent ?
+                            MenuEyeTarget(MenuPlayerRect()) : null);
+                    }
                     if (FirstLaunchIntro && !menuIntroRecorded && !PresentationPreview && menuTitleElapsed >= MenuWordIntroDuration)
                     {
                         PlayerPrefs.SetInt(MenuIntroSeenKey, 1);
@@ -813,6 +933,11 @@ namespace CandyCruisers
             ObserveComboStreak();
             TickComboPresentation(seconds);
             clearBarAnimation.Tick(seconds);
+            if (LostBarAnimation.Active)
+            {
+                LostBarAnimation.Tick(seconds);
+                if (LostBarAnimation.Finished) LostBarAnimation.Reset();
+            }
             if (State == RunState.Dying)
             {
                 float previousAnimationAge = Mathf.Max(0, deathElapsed - GameOverBlackoutSeconds);
@@ -820,33 +945,26 @@ namespace CandyCruisers
                 musicPlayer?.UpdatePlayback();
                 if (deathElapsed < GameOverBlackoutSeconds)
                 {
-                    blackout?.Present(GameOverBlackoutOpacity);
+                    blackout?.Present(GameOverBlackoutOpacity, deathElapsed);
                     return;
                 }
                 if (!deathAnimationStarted)
                 {
                     deathAnimationStarted = true;
-                    blackout?.Present(1);
+                    blackout?.Present(1, GameOverBlackoutSeconds);
                     deathCue = player.BeginFatalDefeat(Progress.Level);
                     hasDeathCue = deathCue != null;
-                    Vector3 impactPosition = deathCue != null ? deathCue.transform.position :
-                        CharacterVisuals.Ensure(player.gameObject).Body.transform.position;
                     // The session owns cue time, including the remainder of a frame crossing the fade boundary.
                     if (deathCue != null) deathCue.enabled = false;
                     blackout.ShowDeath(deathCue);
-                    blackout.BeginImpact(impactPosition, Progress.Level);
                 }
                 float animationAge = Mathf.Max(0, deathElapsed - GameOverBlackoutSeconds);
-                blackout?.Present(GameOverBlackoutOpacity, animationAge);
-                if (!deathShattered && animationAge >= PlayerDeathBurst.ShatterSoundSeconds)
-                {
-                    deathShattered = true;
-                    soundEffects?.PlayCue(SoundEffect.PlayerShatter);
-                }
+                blackout?.Present(GameOverBlackoutOpacity);
                 if (deathCue != null) deathCue.Tick(animationAge - previousAnimationAge);
-                if (hasDeathCue ? deathCue == null || deathCue.Finished : animationAge >= PlayerFatalDustBurst.Duration) EndGame();
+                if (hasDeathCue ? deathCue == null || deathCue.Finished : animationAge >= PlayerMeltDeath.Duration) EndGame();
                 return;
             }
+            ElapsedRoundSeconds += Mathf.Max(0, seconds);
             if (CheckPlayerContact()) return;
             feedbackRemaining = Mathf.Max(0, feedbackRemaining - Mathf.Max(0, seconds));
             if (State != RunState.Refilling) return;
@@ -898,6 +1016,7 @@ namespace CandyCruisers
                 return;
             }
             State = RunState.Playing;
+            LostBarAnimation.Reset();
             clearBarAnimation.Reset();
             Suspend(false);
             grid.RefreshSpecials();
@@ -1119,14 +1238,11 @@ namespace CandyCruisers
                 GameOverBlackoutBeats * CurrentBeatDuration;
             State = RunState.Dying;
             deathElapsed = 0;
-            deathShattered = false;
             deathAnimationStarted = false;
             musicPlayer?.UpdatePlayback();
-            // Prepare the sample before the fracture frame so synthesis cannot delay the impact.
-            soundEffects?.GetClip(SoundEffect.PlayerShatter);
             player.PrepareFatalDefeat();
             blackout = GameOverBlackout.Create(transform, null);
-            blackout.HoldPlayer(CharacterVisuals.Ensure(player.gameObject).Root);
+            blackout.HoldPlayer(CharacterVisuals.Ensure(player.gameObject).Root, GameOverBlackoutSeconds);
             Suspend(true);
         }
 
@@ -1158,7 +1274,7 @@ namespace CandyCruisers
 
         private void RecordLeaderboard()
         {
-            if (leaderboardRecorded || PresentationPreview) return;
+            if (leaderboardRecorded || PresentationPreview || IsAutomatedPlaytest) return;
             leaderboardRecorded = true;
             LastLeaderboardRank = LocalLeaderboard.Submit(Progress.Score, Progress.Level);
         }
@@ -1190,18 +1306,27 @@ namespace CandyCruisers
 
         private void OnGUI()
         {
+            var playtesting = GetComponent<PlaytestHarness>();
+            if (PlaytestPanelOpen) { playtesting?.DrawMenu(); return; }
             var previousMatrix = GUI.matrix;
             float scale = GuiScale;
             if (!Mathf.Approximately(scale, 1))
                 GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1));
+            var developmentMatrix = GUI.matrix;
             try
             {
                 DrawGui();
-                if (MetronomeMenuAvailable && !MetronomeMenuOpen)
+                GUI.matrix = developmentMatrix;
+                if (SongSelectionMenuAvailable && !SongSelection.IsOpen)
+                    SongSelectionMenu.DrawButton(SongSelectionMenu.ButtonRect(new Vector2(Screen.width, Screen.height), Screen.safeArea, scale, MobileMenuActive), ComboFont);
+                if (MetronomeMenuAvailable && !MetronomeMenuOpen && !SongSelection.IsOpen)
                     DrawMetronomeMenuButton();
-                if (VisualMetronomeVisible) DrawDevelopmentMetronome();
+                var overlays = DeveloperOverlayRects;
+                if (VisualMetronomeVisible) DrawDevelopmentMetronome(overlays.Metronome);
+                if (RoundClockVisible) DrawRoundClock(overlays.Clock);
             }
             finally { GUI.matrix = previousMatrix; }
+            if (!SongSelection.IsOpen) playtesting?.DrawMenu();
         }
 
         private static Rect MetronomeSafeRect(Vector2 screen, Rect safeArea, float scale) =>
@@ -1218,13 +1343,13 @@ namespace CandyCruisers
         {
             var safe = MetronomeSafeRect(screen, safeArea, scale);
             float buttonHeight = mobile ? Mathf.Clamp(screen.x / scale * .12f, 44, 72) : 44;
-            var size = new Vector2(Mathf.Min(340, safe.width - 16), Mathf.Min(76 + buttonHeight * 3, safe.height - 16));
+            var size = new Vector2(Mathf.Min(340, safe.width - 16), Mathf.Min(84 + buttonHeight * 4, safe.height - 16));
             return new Rect(safe.center - size / 2, size);
         }
 
         public static Rect MetronomeMenuRowRect(Rect panel, int row)
         {
-            float height = (panel.height - 76) / 3;
+            float height = (panel.height - 84) / 4;
             return new Rect(panel.x + 12, panel.y + 48 + row * (height + 8), panel.width - 24, height);
         }
 
@@ -1232,8 +1357,8 @@ namespace CandyCruisers
         {
             var rect = MetronomeMenuButtonRect(new Vector2(Screen.width, Screen.height), Screen.safeArea, GuiScale, MobileMenuActive);
             var style = new GUIStyle(GUI.skin.button) { font = ComboFont, fontSize = 16 };
-            while (style.fontSize > 9 && style.CalcSize(new GUIContent("Metronomes")).x > rect.width - 8) style.fontSize--;
-            GUI.Box(rect, "Metronomes", style);
+            while (style.fontSize > 9 && style.CalcSize(new GUIContent("Beat & Clock")).x > rect.width - 8) style.fontSize--;
+            GUI.Box(rect, "Beat & Clock", style);
         }
 
         private void DrawMetronomeMenu()
@@ -1245,9 +1370,12 @@ namespace CandyCruisers
             GUI.color = Color.white;
             GUI.Box(panel, "");
             var heading = new GUIStyle(GUI.skin.label) { font = ComboFont, fontSize = 20, alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(panel.x + 12, panel.y + 10, panel.width - 24, 30), "METRONOMES", heading);
+            var title = new Rect(panel.x + 12, panel.y + 10, panel.width - 24, 30);
+            FitGameplayText(heading, "BEAT & CLOCK", title);
+            GUI.Label(title, "BEAT & CLOCK", heading);
             string[] labels = { "Voice metronome: " + (MetronomeSettings.VoiceEnabled ? "ON" : "OFF"),
-                "Visual metronome: " + (MetronomeSettings.VisualEnabled ? "ON" : "OFF"), "Back" };
+                "Visual metronome: " + (MetronomeSettings.VisualEnabled ? "ON" : "OFF"),
+                "Round clock: " + (MetronomeSettings.RoundClockEnabled ? "ON" : "OFF"), "Back" };
             for (int row = 0; row < labels.Length; row++)
             {
                 var rect = MetronomeMenuRowRect(panel, row);
@@ -1258,40 +1386,79 @@ namespace CandyCruisers
             GUI.color = previous;
         }
 
-        public static Rect DevelopmentMetronomeRect(Vector2 screen, Rect safeArea, float scale)
+        public static Rect DevelopmentMetronomeRect(Vector2 screen, Rect safeArea, float scale, bool showClock = false,
+            Rect? playfield = null) => DevelopmentOverlayLayout.Calculate(screen, safeArea, scale,
+                playfield ?? default, showClock, true).Metronome;
+
+        public Rect DevelopmentPlayfieldScreenRect()
         {
-            scale = Mathf.Max(.0001f, scale);
-            float width = Mathf.Min(158, safeArea.width / scale - 16);
-            float height = Mathf.Min(24, safeArea.height / scale - 16);
-            return new Rect(safeArea.xMax / scale - width - 8, (screen.y - safeArea.yMax) / scale + 8, width, height);
+            var camera = Camera.main;
+            if (camera == null) return default;
+            // Use the resting projection so temporary scene pulses never move the readouts.
+            var viewport = camera.pixelRect;
+            var min = camera.transform.InverseTransformPoint(new Vector3(-PlayerMovement.HalfWidth - .2f, -PlayfieldFrame.OuterTopY - .08f));
+            var max = camera.transform.InverseTransformPoint(new Vector3(PlayerMovement.HalfWidth + .2f, PlayfieldFrame.OuterTopY + .08f));
+            float unit = viewport.height / (2 * camera.orthographicSize);
+            return Rect.MinMaxRect(viewport.center.x + min.x * unit, viewport.center.y + min.y * unit,
+                viewport.center.x + max.x * unit, viewport.center.y + max.y * unit);
         }
 
-        private void DrawDevelopmentMetronome()
+        public DevelopmentOverlayLayout.Rects DeveloperOverlayRects => DevelopmentOverlayLayout.Calculate(
+            new Vector2(Screen.width, Screen.height), Screen.safeArea, GuiScale, DevelopmentPlayfieldScreenRect(),
+            RoundClockVisible, VisualMetronomeVisible);
+
+        private void DrawDevelopmentMetronome(Rect rect)
         {
-            var rect = DevelopmentMetronomeRect(new Vector2(Screen.width, Screen.height), Screen.safeArea, GuiScale);
+            if (rect.width <= 0 || rect.height <= 0) return;
             int active = musicPlayer != null && musicPlayer.Source.clip != null ? musicPlayer.CurrentBeatInMeasure : 0;
             var previous = GUI.color;
-            GUI.color = new Color(0, 0, 0, .8f);
+            GUI.color = Color.black;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             var caption = new GUIStyle(GUI.skin.label) { fontSize = 8, alignment = TextAnchor.MiddleLeft };
             caption.normal.textColor = new Color(.65f, .7f, .75f);
             GUI.color = Color.white;
-            GUI.Label(new Rect(rect.x + 5, rect.y, 26, rect.height), "BEAT", caption);
-            var number = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold,
+            float captionWidth = rect.width >= 130 && rect.height >= 20 ? 30 : 0;
+            if (captionWidth > 0) GUI.Label(new Rect(rect.x + 5, rect.y, 26, rect.height), "BEAT", caption);
+            var number = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(1, Mathf.FloorToInt(Mathf.Min(20, rect.height * .85f))), fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter, padding = new RectOffset() };
             for (int beat = 1; beat <= GameplayMusicPlayer.BeatsPerMeasure; beat++)
             {
                 number.normal.textColor = beat == active ? beat == 1 ? new Color(.35f, 1, .6f) : Color.white : new Color(.3f, .35f, .4f);
-                float cellWidth = (rect.width - 30) / 4;
-                GUI.Label(new Rect(rect.x + 30 + (beat - 1) * cellWidth, rect.y, cellWidth, rect.height),
+                float cellWidth = (rect.width - captionWidth) / 4;
+                GUI.Label(new Rect(rect.x + captionWidth + (beat - 1) * cellWidth, rect.y, cellWidth, rect.height),
                     beat.ToString(), number);
             }
+            GUI.color = previous;
+        }
+
+        public static Rect RoundClockRect(Vector2 screen, Rect safeArea, float scale, bool showBeatCounter,
+            Rect? playfield = null) => DevelopmentOverlayLayout.Calculate(screen, safeArea, scale,
+                playfield ?? default, true, showBeatCounter).Clock;
+
+        private void DrawRoundClock(Rect rect)
+        {
+            if (rect.width <= 0 || rect.height <= 0) return;
+            var previous = GUI.color;
+            GUI.color = Color.black;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            var caption = new GUIStyle(GUI.skin.label) { fontSize = 8, alignment = TextAnchor.MiddleLeft };
+            caption.normal.textColor = new Color(.65f, .7f, .75f);
+            float captionWidth = rect.width >= 100 && rect.height >= 20 ? 35 : 0;
+            if (captionWidth > 0) GUI.Label(new Rect(rect.x + 5, rect.y, 30, rect.height), "TIME", caption);
+            var number = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(1, Mathf.FloorToInt(Mathf.Min(20, rect.height * .85f))), fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleRight, padding = new RectOffset() };
+            var time = new Rect(rect.x + captionWidth + 4, rect.y, rect.width - captionWidth - 8, rect.height);
+            while (number.fontSize > 1 && number.CalcSize(new GUIContent(RoundClockText)).x > time.width) number.fontSize--;
+            GUI.Label(time, RoundClockText, number);
             GUI.color = previous;
         }
 
         private void DrawGui()
         {
             if (OpeningWarningActive) { DrawEpilepsyWarning(); return; }
+            if (SongSelection.IsOpen)
+            { SongSelection.Draw(musicPlayer, SongMenuLayout, new Vector2(GuiWidth, GuiHeight), ComboFont); return; }
             if (MetronomeMenuOpen && IsPaused) { DrawMetronomeMenu(); return; }
             if (State == RunState.MainMenu) { DrawMinimalMainMenu(); return; }
             if (State != RunState.MainMenu) DrawProgress(GameOverScoreOpacity);
@@ -1302,8 +1469,11 @@ namespace CandyCruisers
                 if (GUI.Button(pause, new GUIContent("", "Pause (P)"))) Pause();
                 GUI.DrawTexture(new Rect(pause.x + 8, pause.y + 13, 4, 18), Texture2D.whiteTexture);
                 GUI.DrawTexture(new Rect(pause.x + 15, pause.y + 13, 4, 18), Texture2D.whiteTexture);
-                GUI.Label(new Rect(pause.x + 22, pause.y + 12, 25, 22), "(P)",
-                    new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter });
+                var hint = new Rect(pause.x + 22, pause.y + 12, 25, 22);
+                var hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter };
+                var hintMatrix = BeginMagicText(GameplayLabelBounds(hint, "(P)", hintStyle));
+                GUI.Label(hint, "(P)", hintStyle);
+                GUI.matrix = hintMatrix;
             }
             if (!IsPaused && State != RunState.MainMenu && State != RunState.GameOver) return;
             var previous = GUI.color;
@@ -1852,9 +2022,7 @@ namespace CandyCruisers
             if (art != null && character.Visible)
             {
                 GUI.matrix = previousMatrix * character.Transform;
-                var eyeTarget = MenuEyeTarget();
-                if (eyeTarget.HasValue) eyeTarget = character.Transform.inverse.MultiplyPoint3x4(eyeTarget.Value);
-                DrawMenuCharacter(art, character.Body, eyeTarget,
+                DrawMenuCharacter(art, character.Body, menuGaze,
                     MenuEntranceForwardGazeFor(menuTitleElapsed, MenuArriving), MainMenuCharacterColor(beat));
                 GUI.matrix = previousMatrix;
                 if (!MenuArriving && MenuEntrance == MenuIntroAnimation.Entrance.TractorBeam)
@@ -1943,16 +2111,17 @@ namespace CandyCruisers
                     Vector2.Lerp(departure.size, destination.size, ease)));
         }
 
-        private Vector2? MenuEyeTarget() =>
-            MenuEyeTargetFor(Application.isMobilePlatform, Input.mousePresent, Input.mousePosition, GuiScale, GuiHeight,
-                MenuEyeTrackingReady);
+        private Vector2? MenuEyeTarget(Rect characterBody) =>
+            MenuEyeTargetFor(MobileMenuActive, Input.mousePresent, Input.mousePosition, GuiScale, GuiHeight,
+                characterBody, MenuEyeTrackingReady);
 
         public static Vector2? MenuEyeTargetFor(bool mobilePlatform, bool mousePresent, Vector2 mousePosition,
-            float guiScale, float guiHeight, bool trackingReady = true)
+            float guiScale, float guiHeight, Rect characterBody, bool trackingReady = true)
         {
             if (!trackingReady || mobilePlatform || !mousePresent) return null;
             var point = mousePosition / Mathf.Max(.0001f, guiScale);
-            return new Vector2(point.x, guiHeight - point.y);
+            var target = new Vector2(point.x, guiHeight - point.y);
+            return target.y < characterBody.center.y ? target : (Vector2?)null;
         }
 
         public static bool MenuEntranceForwardGazeFor(float elapsed, bool arriving) =>
@@ -2010,12 +2179,14 @@ namespace CandyCruisers
         }
 
         public static Rect MenuEyeFollowRect(Rect pupil, Rect eye, Vector2 mousePosition)
+            => MenuEyeGazeRect(pupil, eye, Vector2.ClampMagnitude((mousePosition - eye.center) / 180f, 1));
+
+        public static Rect MenuEyeGazeRect(Rect pupil, Rect eye, Vector2 direction)
         {
-            var delta = mousePosition - eye.center;
             var travel = new Vector2(Mathf.Max(0, eye.width - pupil.width),
                 Mathf.Max(0, eye.height - pupil.height)) * .4f;
-            var offset = Vector2.Scale(Vector2.ClampMagnitude(delta / 180f, 1), travel);
-            // Discard the authored upward gaze before applying the cursor direction.
+            var offset = Vector2.Scale(Vector2.ClampMagnitude(direction, 1), travel);
+            // Center each pupil independently so a forward gaze looks directly at the player.
             return new Rect(eye.center + offset - pupil.size / 2, pupil.size);
         }
 
@@ -2024,7 +2195,7 @@ namespace CandyCruisers
                 target.y + (body.max.y - part.max.y) / body.size.y * target.height,
                 part.size.x / body.size.x * target.width, part.size.y / body.size.y * target.height);
 
-        private static void DrawMenuCharacter(CharacterVisuals art, Rect target, Vector2? eyeTarget,
+        private static void DrawMenuCharacter(CharacterVisuals art, Rect target, MenuGazeAnimation gaze,
             bool forwardGaze, Color bodyColor)
         {
             if (art.Body == null || art.Body.sprite == null) return;
@@ -2035,7 +2206,7 @@ namespace CandyCruisers
             {
                 if (piece.sprite == null || !piece.enabled) continue;
                 var rect = MenuPieceRect(piece.bounds, bounds, target);
-                if ((eyeTarget.HasValue || forwardGaze) && IsMenuEyePiece(piece))
+                if (IsMenuEyePiece(piece))
                 {
                     SpriteRenderer eye = null;
                     float nearest = float.PositiveInfinity;
@@ -2050,7 +2221,7 @@ namespace CandyCruisers
                     if (eye != null)
                     {
                         var eyeRect = MenuPieceRect(eye.bounds, bounds, target);
-                        rect = MenuEyeFollowRect(rect, eyeRect, forwardGaze ? eyeRect.center : eyeTarget.Value);
+                        rect = MenuEyeGazeRect(rect, eyeRect, forwardGaze ? Vector2.zero : gaze.DirectionFor(eyeRect));
                     }
                 }
                 var source = piece.sprite.rect;
@@ -2151,14 +2322,12 @@ namespace CandyCruisers
         public static Rect LevelProgressSolidRect(Rect bar, bool pending, float pulse)
         {
             float expansion = (pending ? 3 : LevelProgressPulseExpansion) * Mathf.Clamp01(pulse);
-            return new Rect(bar.x - expansion, bar.y - expansion,
-                bar.width + expansion * 2, bar.height + expansion * 2);
+            return new Rect(bar.x, bar.y - expansion, bar.width, bar.height + expansion * 2);
         }
         public static Rect LevelProgressGlowRect(Rect bar, float pulse)
         {
             float expansion = Mathf.Lerp(3, 8, Mathf.Clamp01(pulse));
-            return new Rect(bar.x - expansion, bar.y - expansion * .55f,
-                bar.width + expansion * 2, bar.height + expansion * 1.1f);
+            return new Rect(bar.x, bar.y - expansion * .55f, bar.width, bar.height + expansion * 1.1f);
         }
 
         public const float LevelProgressBaseHeight = 9f * 1.5f;
@@ -2190,12 +2359,12 @@ namespace CandyCruisers
             int viewHeight = Mathf.RoundToInt(camera.pixelHeight / GuiScale);
             var lifeRow = PlayerLifeIcons.RowRect(x, y, viewHeight);
             float progressY = y + PlayerLifeIcons.ProgressOffset(viewHeight);
-            var label = new GUIStyle(GUI.skin.label) { fontSize = viewHeight < 400 ? 11 : viewHeight < 600 ? 13 : 16, fontStyle = FontStyle.Bold };
-            label.normal.textColor = Color.white;
             float textWidth = width - (PauseButtonVisible ? 54 : 0);
             float beat = musicPlayer != null ? musicPlayer.BeatPosition : Time.time / FullSetCelebration.StepDuration;
             float pulse = GameplayMusicPlayer.BeatPulse(beat);
             var progressBar = new Rect(x, progressY, width, LevelProgressBaseHeight);
+            var progressMatrix = GUI.matrix;
+            GUIUtility.ScaleAroundPivot(new Vector2(1, MagicTextGrowthScale), progressBar.center);
             var solidBar = LevelProgressSolidRect(progressBar, Progress.LevelUpPending, pulse);
             GUI.color = new Color(.3f, .4f, .45f, .7f * opacity);
             GUI.DrawTexture(solidBar, Texture2D.whiteTexture);
@@ -2218,13 +2387,16 @@ namespace CandyCruisers
                 GUI.color = banked;
                 GUI.DrawTexture(LevelProgressBankedRect(solidBar, Progress.BankedLevelProgressFraction), Texture2D.whiteTexture);
             }
+            GUI.matrix = progressMatrix;
             var colors = DisplayedColorClearBarColors;
             float bottom = GuiHeight - ToGuiPoint(camera.WorldToScreenPoint(new Vector3(0, -5.25f, 0))).y;
             for (int i = 0; i < colors.Count; i++)
             {
                 var color = colors[i];
                 var resting = ColorClearBarSlotRect(x, bottom, width, colors.Count, i);
-                bool powered = grid != null && grid.HasColorClearBar(color) && ClearCelebration.Visible(color);
+                bool losingPower = grid != null && !grid.HasColorClearBar(color) &&
+                    LostBarAnimation.Active && LostBarAnimation.Visible(color);
+                bool powered = losingPower || grid != null && grid.HasColorClearBar(color) && ClearCelebration.Visible(color);
                 if (!powered)
                 {
                     DrawPoweredDownColorClearBar(color, resting, opacity);
@@ -2235,8 +2407,8 @@ namespace CandyCruisers
                 // The enlarged bar stays inside the playfield, including the end slots.
                 animated.width = Mathf.Min(animated.width, width);
                 animated.x = Mathf.Clamp(animated.x, x, x + width - animated.width);
-                float drain = ClearCelebration.PowerDownProgressFor(color);
-                if (transitioning && (ClearCelebration.SimultaneousPowerDown || drain > 0))
+                float drain = losingPower ? LostBarAnimation.PowerDownProgressFor(color) : ClearCelebration.PowerDownProgressFor(color);
+                if (losingPower || transitioning && (ClearCelebration.SimultaneousPowerDown || drain > 0))
                     DrawPoweringDownColorClearBar(color, animated, opacity, drain);
                 else DrawPoweredColorClearBar(color, animated, opacity, beat, i);
             }
@@ -2252,16 +2424,12 @@ namespace CandyCruisers
                     var comboMatrix = GUI.matrix;
                     var breakRect = ComboBreak.DisplayRect(comboRect, GuiWidth, GuiHeight);
                     GUIUtility.ScaleAroundPivot(Vector2.one * GameplayTextPulseScale(beat), breakRect.center);
-                    ComboBreak.Draw(comboRect, comboStyle, opacity, GuiWidth, GuiHeight, GameplayTextColor);
+                    ComboBreak.Draw(comboRect, comboStyle, opacity, GuiWidth, GuiHeight, GameplayTextColor, MagicTextGrowthScale);
                     GUI.matrix = comboMatrix;
                 }
             }
             GUI.color = new Color(1, 1, 1, opacity);
-            label.fontSize = viewHeight < 600 ? 11 : 13;
-            label.fontStyle = FontStyle.Normal;
-            label.alignment = TextAnchor.UpperLeft;
-            label.wordWrap = true;
-            if (player != null) player.LifeIcons.Draw(player, lifeRow, opacity, GuiWidth, GuiHeight);
+            if (player != null) player.LifeIcons.Draw(player, lifeRow, opacity, GuiWidth, GuiHeight, MagicTextGrowthScale);
             // Keep the heading above life artwork, including traveling reward/loss animations.
             GUI.color = new Color(1, 1, 1, opacity);
             int headingSize = GameplayHeadingFontSize(viewHeight);
@@ -2269,17 +2437,6 @@ namespace CandyCruisers
                 GameplayTextStyle(headingSize, TextAnchor.MiddleLeft), GameplayTextColor, opacity, beat);
             DrawGameplayText(GameplayLevelRect(x, y, textWidth), "LEVEL " + Progress.Level,
                 GameplayTextStyle(headingSize, TextAnchor.MiddleRight), GameplayTextColor, opacity, beat);
-            string status = "";
-            if (player != null && player.MagicCharges > 0)
-                status += (status.Length > 0 ? "  |  " : "") + "MAGIC " + player.MagicCharges;
-            if (feedbackRemaining > 0) status += (status.Length > 0 ? "  |  " : "") + feedback;
-            if (status.Length > 0)
-            {
-                var statusRect = new Rect(x, progressY + 12, width, 40);
-                while (label.fontSize > 9 && label.CalcHeight(new GUIContent(status), width) > statusRect.height)
-                    label.fontSize--;
-                GUI.Label(statusRect, status, label);
-            }
             GUI.color = previous;
         }
 

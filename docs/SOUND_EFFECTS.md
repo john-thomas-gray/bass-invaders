@@ -62,10 +62,9 @@ recordings can stay on the developer machine without entering Git history. A cle
 checkout runs silently; adding local recordings whose names match the soundtrack
 entries below re-enables menu and gameplay music.
 
-When local recordings are present, a temporary lock starts each fresh menu with
-Disco Descent. Clear `TemporaryMenuStartResourceName` in `GameplayMusicPlayer` to
-restore random starts. If that recording is absent, selection falls back to the
-available soundtrack; an explicit menu-track Inspector override is still honored. Starting gameplay
+When local recordings are present, each fresh menu selects a random soundtrack
+song, falling back to an available recording if the selected resource is absent.
+An explicit menu-track Inspector override is still honored. Starting gameplay
 continues that same song from its current sample position without a stop, seek,
 restart, volume change or beat-phase reset. The song finishes its current pass,
 then gameplay shuffles the remaining recordings. The playlist contains Another
@@ -81,25 +80,25 @@ in the shuffle bag. Each song finishes before the next
 begins. Every shuffle bag includes each song once and avoids an immediate repeat
 at its boundary.
 Playlist randomness does not consume gameplay random numbers.
-The **Metronomes** panel in the pause menu has independent saved voice
+The **Beat & Clock** panel in the pause menu has independent saved voice
 and visual switches, both OFF by default. Voice ON replaces music with the looping
 spoken count and retains its own beat map and downbeat offset; OFF restores regular
 song selection. It bypasses the level playlist only while explicitly enabled and
 cannot enter regular shuffle bags. Visual ON displays the beat counter during
 unpaused gameplay, following whichever recording is active. While paused, F9 toggles the voice switch and F10 toggles the visual switch.
+The panel also has an independent saved round clock switch, OFF by default; F7 toggles it while paused.
 These controls are unavailable on the main menu and during unpaused gameplay.
 F8 skips to the next song on the menu or during gameplay in the Unity editor and
-development builds, including while paused. Menu skips stay on the menu and are
-not reset by the temporary starting-song lock. The opening warning still blocks
+development builds, including while paused. Menu skips stay on the menu and
+preserve the selected song. The opening warning still blocks
 skips. The shortcut preserves a single-clip Inspector override for the current
 context and is disabled in release builds. An assigned gameplay
 override takes over only after the carried menu song finishes.
-Fatal death stops the current track immediately, before the death animation
-advances. The scene fades to black over the duration of the next two mapped beats,
-captured before playback stops, while the intact player stays visible and moves to centerstage. Only then does the game-over death
-animation start. `PlayerShatter` starts once at `PlayerDeathBurst.ShatterSoundSeconds`
-(0.08 seconds into that animation, after the fade), just ahead of the marker that releases the fragments. There is no later
-game-over cadence or music fade. Recoverable deaths leave music unchanged.
+Fatal death slows and fades the current track over four mapped beats, while the
+scene fades to black and the intact player moves to centerstage. The music stops
+before the pupil-spin, X-eye and melt animation begins. Final death plays neither
+`PlayerShatter` nor the legacy game-over cadence. Recoverable deaths leave music
+unchanged.
 Pause keeps the song position and resumes from there. Supplied soundtrack
 recordings can use any Unity-supported local audio format.
 
@@ -270,8 +269,8 @@ long chains inside the audio engine's pitch range without clamping to an out-of-
 Small-chain pops stay at base pitch. Wave audio fires once per batch, and one-up audio only when
 a life is actually granted.
 
-`PlayerShatter` plays once just before the fatal player's fragments appear, not
-after the animation ends. Its generated fallback preserves the 0.7-second dry crack
+`PlayerShatter` remains available for explicit use, but final death no longer
+triggers it. Its generated fallback preserves the 0.7-second dry crack
 and glass-like ringing, then adds distinct left/right echoes at 0.18/0.215 seconds
 and damped room reflections, with a 2.8-second total stereo tail. Effects are
 baked into this cue only, so pooled voices never carry reverb into unrelated
@@ -281,8 +280,7 @@ like a tape stop, dropping from normal speed to 4 percent speed (one fifth speed
 the midpoint) while its normalized volume fades to zero. This envelope follows the
 unscaled death-fade clock captured at the fatal hit, not the slowing audio clock.
 The track is neither restarted nor replaced; playlist advancement is suspended.
-Music is fully stopped before the fatal dust and shatter, which retain their normal
-speed and volume. Normal playback restores the original music pitch. The legacy `GameOver`
+Music is fully stopped before the pupil-spin and melt animation. Normal playback restores the original music pitch. The legacy `GameOver`
 cadence remains available for explicit use but the session no longer plays it.
 
 ## Missile Flight

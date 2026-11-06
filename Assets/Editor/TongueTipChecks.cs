@@ -65,6 +65,7 @@ namespace CandyCruisers.Editor
         {
             foreach (var size in new[] { new Vector2Int(1280, 720), new Vector2Int(390, 844), new Vector2Int(1206, 2622) })
             foreach (bool magic in new[] { false, true })
+            foreach (bool returning in new[] { false, true })
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
                 var line = tongue.GetComponent<LineRenderer>();
@@ -74,7 +75,13 @@ namespace CandyCruisers.Editor
                 line.endWidth = .11f;
                 line.sortingOrder = 19;
                 tongue.TryFire(EnemyColor.Red, 4, magic);
-                tongue.Tick(magic ? .025f : .1f);
+                if (returning)
+                {
+                    tongue.Tick(4f / (magic ? 56 : 14));
+                    tongue.SetReturnColor(EnemyColor.Red, true);
+                    tongue.Draw();
+                }
+                else tongue.Tick(magic ? .025f : .1f);
                 foreach (var child in tongue.GetComponentsInChildren<Transform>()) child.gameObject.layer = 31;
                 var cameraObject = new GameObject("Tongue tip render camera", typeof(Camera));
                 var view = cameraObject.GetComponent<Camera>();
@@ -105,10 +112,18 @@ namespace CandyCruisers.Editor
                         if (pixels.GetPixel(x, row).maxColorComponent > .3f) width++;
                     float shaftPixels = line.endWidth * size.y / (2 * view.orthographicSize);
                     Directory.CreateDirectory("TestResults");
-                    File.WriteAllBytes("TestResults/tongue-tip-" + size.x + "x" + size.y + (magic ? "-magic" : "") + ".png",
+                    File.WriteAllBytes("TestResults/tongue-tip-" + size.x + "x" + size.y + (magic ? "-magic" : "") +
+                        (returning ? "-returning-rainbow" : "") + ".png",
                         pixels.EncodeToPNG());
                     Check(width >= shaftPixels * 1.7f,
                         "Rendered bulb is visibly wider than the shaft at " + size + ", magic=" + magic + ": " + width);
+                    if (returning)
+                    {
+                        var midpoint = view.WorldToScreenPoint(tongue.transform.position + Vector3.up * (tongue.Length * .5f));
+                        var tint = pixels.GetPixel(Mathf.RoundToInt(midpoint.x), Mathf.RoundToInt(midpoint.y));
+                        Check(tint.g > tint.r + .2f && tint.g > tint.b + .2f,
+                            "The first return frame visibly renders the rainbow's green midpoint at " + size);
+                    }
                     tongue.Cancel();
                     player.ResetForRun();
                     view.Render();

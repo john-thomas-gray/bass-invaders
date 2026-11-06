@@ -207,10 +207,11 @@ namespace CandyCruisers.Editor
 
         private static void CheckMappedMovement()
         {
+            foreach (string track in new[] { "DiscoDescent", GameplayMusicPlayer.CountingResourceName })
             foreach (int frames in new[] { 1, 60 })
             {
                 var root = new GameObject("Mapped movement fixture", typeof(EnemyGrid), typeof(EnemyGridMovement), typeof(GameplayMusicPlayer));
-                var clip = AudioClip.Create("DiscoDescent", 44100 * 4, 1, 44100, false);
+                var clip = AudioClip.Create(track, 44100 * 4, 1, 44100, false);
                 try
                 {
                     var grid = root.GetComponent<EnemyGrid>();
@@ -231,9 +232,9 @@ namespace CandyCruisers.Editor
                         music.Source.timeSamples = Mathf.RoundToInt(Mathf.Lerp(.35f, 3.11f, i / (float)frames) * clip.frequency);
                         movement.Tick(2.76 / frames);
                     }
-                    Check(pulses == 6, "Every crossed mapped beat produces one movement pulse, including long frames");
-                    Near(root.transform.position.x, movement.CurrentSpeed * 3,
-                        "Movement integrates each completed interval across acceleration and slowdown");
+                    Check(pulses == 3, "Mapped counts two and four produce one movement pulse each, including long frames and shifted downbeats");
+                    Near(root.transform.position.x, movement.CurrentSpeed * 1.5f,
+                        "Movement spends only the selected single-beat intervals across acceleration and slowdown");
                     music.Source.Pause();
                     float pausedBeat = music.BeatPosition;
                     Near(music.BeatPosition, pausedBeat, "Pausing leaves mapped phase unchanged");

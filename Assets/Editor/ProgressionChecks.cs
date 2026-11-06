@@ -59,17 +59,18 @@ namespace CandyCruisers.Editor
             Check(Mathf.Abs(GameSession.LevelProgressFillRect(progressBar, 2).width - progressBar.width) < .001f &&
                 Mathf.Abs(GameSession.LevelProgressBankedRect(progressBar, .35f).width - 35) < .001f,
                 "Level progress bar clamps the filled current bar and tracks banked next-bar progress");
-            Check(GameSession.LevelProgressGlowRect(progressBar, 1).width > GameSession.LevelProgressGlowRect(progressBar, 0).width,
-                "Pending level progress glow swells on the beat");
+            Check(GameSession.LevelProgressGlowRect(progressBar, 1).height > GameSession.LevelProgressGlowRect(progressBar, 0).height &&
+                GameSession.LevelProgressGlowRect(progressBar, 1).width == progressBar.width,
+                "Pending level progress glow swells only vertically on the beat");
             var swollen = GameSession.LevelProgressSolidRect(progressBar, true, 1);
-            Check(swollen.width == progressBar.width + 6 && swollen.height == progressBar.height + 6 &&
-                swollen.center == progressBar.center, "The pending solid fill expands around its center on the beat");
+            Check(swollen.width == progressBar.width && swollen.height == progressBar.height + 6 &&
+                swollen.center == progressBar.center, "The pending solid fill expands vertically around its center on the beat");
             Check(GameSession.LevelProgressSolidRect(progressBar, true, 0) == progressBar &&
                 GameSession.LevelProgressSolidRect(progressBar, false, 0) == progressBar,
                 "Normal and pending progress return to resting size between beats");
             var normalPulse = GameSession.LevelProgressSolidRect(progressBar, false, 1);
-            Check(normalPulse.width > progressBar.width && normalPulse.height > progressBar.height &&
-                normalPulse.width < swollen.width && normalPulse.center == progressBar.center,
+            Check(normalPulse.width == progressBar.width && normalPulse.height > progressBar.height &&
+                normalPulse.height < swollen.height && normalPulse.center == progressBar.center,
                 "Normal progress also pulses on the beat, with a stronger pulse while a level is pending");
             foreach (float fraction in new[] { 0f, .25f, .75f, 1f })
                 Check(Mathf.Abs(GameSession.LevelProgressFillRect(normalPulse, fraction).width / normalPulse.width - fraction) < .0001f,

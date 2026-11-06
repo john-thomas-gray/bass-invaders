@@ -15,6 +15,9 @@ namespace CandyCruisers
         public const float OuterTopY = 5.62f;
         public const float BoundaryLineWidth = .045f;
         public const float OutlineLineWidth = .018f;
+        public const float CornerLineWidth = .065f;
+        public const float InnerBeatGrowth = .09f;
+        public const float InnerEdgePeakScale = 3f;
         private GameSession subscribedSession;
         private float spawnPulseDuration = SpawnPulseSeconds;
         private float spawnPulseRemaining;
@@ -134,10 +137,46 @@ namespace CandyCruisers
             if (player != null && player.ReturnColorPreview.HasValue)
             {
                 ApplyTint(player.AccentColor);
+                ApplyMagicPulse(beatPosition);
                 return;
             }
             int phase = Mathf.FloorToInt(Mathf.Max(0, beatPosition) * 2);
             ApplyTint(player != null && player.HasFleet && phase % 2 != 0 ? player.AccentColor : Color.white);
+            ApplyMagicPulse(beatPosition);
+        }
+
+        public static float InnerPulseScale(int bars, float beat, bool even, int downbeatOffset = 0,
+            float basePeak = 1 + InnerBeatGrowth)
+        {
+            if (bars <= 0) return 1;
+            int nearestBeat = Mathf.FloorToInt(beat + .5f);
+            bool evenBeat = GameplayMusicPlayer.BeatInMeasure(nearestBeat, downbeatOffset) % 2 == 0;
+            if (evenBeat != even) return 1;
+            float pulse = GameplayMusicPlayer.BeatPulse(beat);
+            return Mathf.Lerp(1, basePeak, pulse) * MagicPowerPresentation.TextGrowthScale(bars, beat);
+        }
+
+        private void ApplyMagicPulse(float beat)
+        {
+            int bars = isActiveAndEnabled && player != null ? player.ActiveMagicBars : 0;
+            if (subscribedSession != null && subscribedSession.State != GameSession.RunState.Playing &&
+                subscribedSession.State != GameSession.RunState.Refilling) bars = 0;
+            int offset = player != null && player.Music != null ? player.Music.CurrentDownbeatOffsetBeats : 0;
+            float edge = InnerPulseScale(bars, beat, false, offset, InnerEdgePeakScale);
+            float cornerScale = InnerPulseScale(bars, beat, true, offset);
+            // The inner edge swells in thickness, leaving the outer outline and playfield fixed.
+            boundary.startWidth = boundary.endWidth = BoundaryLineWidth * edge;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                var corner = corners[i];
+                if (corner == null) continue;
+                float side = i < 2 ? -1 : 1, end = i % 2 == 0 ? -1 : 1;
+                var center = new Vector3(side * 2.725f, end * 5.225f);
+                corner.transform.localScale = new Vector3(cornerScale, cornerScale, 1);
+                corner.transform.localPosition = center * (1 - cornerScale);
+                corner.startWidth = corner.endWidth = CornerLineWidth * cornerScale;
+            }
+            if (Application.isPlaying || playerClip != null) RefreshPlayerClip();
         }
 
         public void Refresh(float time)
@@ -156,6 +195,9 @@ namespace CandyCruisers
                 color = phase % 2 == 0 ? Color.white : EnemyPalette.Get(earnedColors[phase / 2]);
             }
             ApplyTint(color);
+            // Celebration colors use this path too; color priority must not cancel size animation.
+            var music = player != null ? player.Music : null;
+            ApplyMagicPulse(music != null ? music.BeatPosition : time / FullSetCelebration.StepDuration);
         }
 
         private void ApplyTint(Color color)
@@ -166,7 +208,12 @@ namespace CandyCruisers
             Tint(outline, color, .5f);
             foreach (var corner in corners)
             {
-                if (corner != null) corner.startWidth = corner.endWidth = .065f;
+                if (corner != null)
+                {
+                    corner.startWidth = corner.endWidth = CornerLineWidth;
+                    corner.transform.localScale = Vector3.one;
+                    corner.transform.localPosition = Vector3.zero;
+                }
                 Tint(corner, color, 1);
             }
             // Do not serialize temporary mask settings into scene snapshots on entering play mode.

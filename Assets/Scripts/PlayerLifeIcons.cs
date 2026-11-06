@@ -119,7 +119,9 @@ namespace CandyCruisers
         {
             float cell = row.width / LayoutSlots;
             float size = Mathf.Min(20 * SizeScale, Mathf.Min(row.height, cell - 8));
-            var center = new Vector2(row.x + cell * .5f + slot * (size + 4), row.center.y);
+            // Fixed spacing leaves room for the largest bonus without moving the icons on a beat.
+            float pitch = size * 1.09f * MagicPowerPresentation.TextGrowthScale(EnemyPalette.Colors.Count, 0) + 4;
+            var center = new Vector2(row.x + cell * .5f + slot * pitch, row.center.y);
             size *= scale;
             return new Rect(center.x - size / 2, center.y - size / 2, size, size);
         }
@@ -197,7 +199,7 @@ namespace CandyCruisers
         public void Draw(PlayerMovement player, Rect row, float opacity) =>
             Draw(player, row, opacity, Screen.width, Screen.height);
 
-        public void Draw(PlayerMovement player, Rect row, float opacity, float screenWidth, float screenHeight)
+        public void Draw(PlayerMovement player, Rect row, float opacity, float screenWidth, float screenHeight, float growth = 1)
         {
             Rect destination = PlayerRect(player, screenWidth, screenHeight);
             var color = player.AccentColor;
@@ -217,7 +219,7 @@ namespace CandyCruisers
                 if (!consuming && (slot >= player.ExtraLives || IsGainPending(slot))) continue;
                 var rect = IconRect(row, slot, consuming ? 1 : Choreography.Scale);
                 if (consuming)
-                    travelingArtwork.Draw(LossDisplayRect(rect, destination, TravelProgress, screenWidth / 2), color, opacity,
+                    DrawGrowing(travelingArtwork, LossDisplayRect(rect, destination, TravelProgress, screenWidth / 2), color, opacity, growth,
                         rotation: LossRotation, verticalScale: LossVerticalScale(TravelProgress));
                 else
                 {
@@ -225,7 +227,7 @@ namespace CandyCruisers
                     float angle = Choreography.FlipAngle * Mathf.Deg2Rad;
                     float fit = 1 / (Mathf.Abs(Mathf.Sin(angle)) + Mathf.Abs(Mathf.Cos(angle)));
                     rect = new Rect(rect.center - rect.size * fit / 2, rect.size * fit);
-                    artwork.Draw(rect, color, opacity, Choreography.Lean, Choreography.FlipAngle,
+                    DrawGrowing(artwork, rect, color, opacity, growth, Choreography.Lean, Choreography.FlipAngle,
                         Choreography.FlipVerticalScale);
                 }
             }
@@ -235,9 +237,18 @@ namespace CandyCruisers
                 var rect = Gain.DisplayRect(artwork.Fit(IconRect(row, Gain.Slot)), bars, destination.size, screenWidth);
                 rect.position -= clip.position;
                 GUI.BeginGroup(clip);
-                try { travelingArtwork.Draw(rect, color, opacity, rotation: Gain.Rotation); }
+                try { DrawGrowing(travelingArtwork, rect, color, opacity, growth, rotation: Gain.Rotation); }
                 finally { GUI.EndGroup(); }
             }
+        }
+
+        private static void DrawGrowing(LifeSlimeArtwork artwork, Rect rect, Color color, float opacity, float growth,
+            float lean = 0, float rotation = 0, float verticalScale = 1)
+        {
+            var previous = GUI.matrix;
+            GUI.matrix = MagicPowerPresentation.ElementMatrix(previous, rect, growth);
+            try { artwork.Draw(rect, color, opacity, lean, rotation, verticalScale); }
+            finally { GUI.matrix = previous; }
         }
     }
 }

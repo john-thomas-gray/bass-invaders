@@ -20,12 +20,12 @@ namespace CandyCruisers.Editor
             try
             {
                 SpawnOverride.Enabled = false;
-                first.numberOfColors = 3; first.fleetSpawns = new[] { "11223/33112" }; first.lineSpawns = new[] { "11223" };
-                first.possibleColors = new[] { EnemyColor.Red, EnemyColor.Blue, EnemyColor.Green, EnemyColor.Purple, EnemyColor.Yellow };
-                first.requiredColors = new[] { EnemyColor.Green };
+                first.fleets[0].initialFleet = new[] { "11223", "33112" }; first.fleets[0].lineSpawns = new[] { "11223" };
+                first.fleets[0].possibleColors = new[] { EnemyColor.Red, EnemyColor.Blue, EnemyColor.Green, EnemyColor.Purple, EnemyColor.Yellow };
+                first.fleets[0].requiredColors = new[] { EnemyColor.Green };
                 first.possibleSoundtrackTracks = new[] { "MissingFleetStateCheck" };
-                second.enemiesToDefeat = 40; second.numberOfColors = 1; second.fleetSpawns = new[] { "11111/11111" }; second.lineSpawns = new[] { "11111" };
-                second.possibleColors = second.requiredColors = new[] { EnemyColor.Blue };
+                second.fleets[0].initialFleet = new[] { "11111", "11111" }; second.fleets[0].lineSpawns = new[] { "11111" };
+                second.fleets[0].possibleColors = second.fleets[0].requiredColors = new[] { EnemyColor.Blue };
                 second.possibleSoundtrackTracks = first.possibleSoundtrackTracks;
                 catalog.levels = new[] { first, second };
                 SpecialEnemyChecks.Fixture((grid, player, tongue) =>
@@ -43,8 +43,8 @@ namespace CandyCruisers.Editor
                     Check(expected.Length == 3 && reservation.Rows == 2 && session.DisplayedColorClearBarColors.SequenceEqual(expected),
                         "Opening bars use exactly the reserved selection, not the five possible colors");
                     var copied = reservation.CopyCells(); copied[0] = EnemyColor.Orange;
-                    first.numberOfColors = 1; first.fleetSpawns = new[] { "11111/11111/11111" };
-                    first.possibleColors = first.requiredColors = new[] { EnemyColor.Blue };
+                    first.fleets[0].initialFleet = new[] { "11111", "11111", "11111" };
+                    first.fleets[0].possibleColors = first.fleets[0].requiredColors = new[] { EnemyColor.Blue };
                     Check(!reservation.CopyCells().Contains(EnemyColor.Orange) && reservation.Rows == 2 &&
                         session.DisplayedColorClearBarColors.SequenceEqual(expected), "Reserved cells and dimensions survive edits without changing the bars");
                     session.Tick(20);
@@ -54,7 +54,6 @@ namespace CandyCruisers.Editor
                     Check(spawner.TryAdvance() && session.Fleet.Count == 15 &&
                         session.Fleet.PresentColors().All(expected.Contains), "Later rows keep the active palette despite level asset edits");
                     CheckGeometry(session);
-                    session.Progress.RegisterClear(session.Progress.NextThreshold - session.Progress.Defeated - 1, false);
                     foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>().ToArray())
                     {
                         if (grid.View(enemy.Id) == null) continue;
@@ -132,10 +131,10 @@ namespace CandyCruisers.Editor
                     var spawner = grid.GetComponent<EnemyRowSpawner>();
                     foreach (int count in new[] { 1, 2, 3, 4, 5, 6, 2, 1 })
                     {
-                        definition.numberOfColors = count; definition.possibleColors = EnemyPalette.Colors.Take(count).ToArray();
+                        definition.fleets[0].possibleColors = EnemyPalette.Colors.Take(count).ToArray();
                         string pattern = string.Concat(Enumerable.Range(0, 10).Select(i => ((char)('1' + i % count)).ToString()));
-                        definition.fleetSpawns = new[] { pattern.Substring(0, 5) + "/" + pattern.Substring(5) };
-                        definition.lineSpawns = Array.Empty<string>();
+                        definition.fleets[0].initialFleet = new[] { pattern.Substring(0, 5), pattern.Substring(5) };
+                        definition.fleets[0].lineSpawns = Array.Empty<string>();
                         var plan = spawner.PlanNextFleet();
                         Check(spawner.SpawnBatch(plan) && grid.Fleet.Count == 10 &&
                             session.DisplayedColorClearBarColors.SequenceEqual(grid.Fleet.PresentColors()) &&

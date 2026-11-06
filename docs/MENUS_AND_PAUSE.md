@@ -17,12 +17,13 @@ descent and draws over him, so he appears inside it. On landing it fans shut
 to a bright narrow line, then retracts upward into space. All three land at the
 original perch, at normal gameplay size.
 `MenuIntroAnimation` owns these paths and stage durations; the title keeps its
-live soundtrack pulse throughout. Tap or click anywhere, or
+live soundtrack pulse throughout. Tap or click outside menu controls, or
 press Enter or Space, to fade the title and float the slime down to its gameplay position
 over 1.2 seconds. The opening fleet starts afterward; input and enemy activity
 remain locked throughout the arrival. Repeated taps do not restart it. THE
 RHYTHM IS OUT THERE sits beneath the title, changes color on the beat, and fades
-with it on arrival. No buttons, previews or leaderboard are displayed.
+with it on arrival. Once the intro settles, **Song Selection (S)** opens in the
+upper-right corner. The rest of the menu has no previews or leaderboard.
 The soundtrack continues uninterrupted through the arrival. During the intro,
 a tap, click, Space or Enter skips directly to the settled menu without starting
 gameplay. The next activation starts the normal departure. Once the intro has
@@ -68,12 +69,34 @@ These visual changes do not resize collision bounds.
 Use P, Escape or the pause button in the upper-right playfield header to pause.
 P, Escape or Resume continues the same run. Losing focus or backgrounding the
 application pauses an active run; returning to it does not resume automatically.
-The pause menu also offers Restart, Main Menu, and a **Metronomes** panel with
-independent saved voice and visual switches. These controls appear only while
+The pause menu also offers Restart, Main Menu, and a **Beat & Clock** panel with
+independent saved voice metronome, visual beat counter, and round clock switches.
+The clock defaults off and displays elapsed round time as `00:00` (minutes:seconds).
+It counts during gameplay and fleet refills, freezes while paused or after fatal defeat,
+and resets for each new run. Hiding it keeps the elapsed time running. When both
+displays are enabled, the clock and beat counter share unused space outside the
+playfield: side gutters on wider screens or the lower margin on tall phones.
+They compact or stack when needed, respect the safe area, and keep a fixed size
+through magic pulses and other gameplay animation.
+These controls appear only while
 paused. Back returns to the pause menu without resuming; F9 and F10 toggle voice
-and visual metronomes while paused. The main menu has no metronome controls. Game over shows only a white
+and visual metronomes while paused; F7 toggles the clock. The main menu has no metronome controls. Game over shows only a white
 GAME OVER title above screen center; the final score is still saved to the local leaderboard.
 R restarts a current run.
+
+**Song Selection** is available from the settled main menu and while paused.
+All songs are checked by default. Click or tap a song's checkbox to include or
+exclude it from gameplay; at least one song must stay checked. Choices save
+immediately and survive restarts. Previous and Next page through the soundtrack.
+On desktop, S opens the menu, Up/Down selects a row, Left/Right changes pages,
+and Space or Enter toggles the focused song. Back, Escape, P, or S closes the
+panel; closing it during pause keeps the game paused. The menu consumes taps
+and keyboard shortcuts so editing a playlist cannot start or restart a run.
+The menu song and gameplay shuffle both honor the selection. Changing the
+selection replaces an excluded current song, preserving pause when applicable.
+Levels use their configured tracks when any are selected; when none overlap,
+they use the player's selected soundtrack. The separate voice metronome setting
+is unaffected by song selection.
 
 Pause buttons show their hotkeys in parentheses: Resume (P / Enter),
 Restart (R), and Main Menu (M). After GAME OVER fades in, Enter also restarts.

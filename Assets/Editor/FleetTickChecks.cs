@@ -24,10 +24,10 @@ namespace CandyCruisers.Editor
                     float beat = FullSetCelebration.StepDuration;
                     movement.Tick(beat * .5);
                     Check(root.transform.position.x == 0 && pulses.Count == 0, "Fleet holds still between beats");
-                    for (int i = 0; i < frames; i++) movement.Tick(6.0 * beat / frames);
+                    for (int i = 0; i < frames; i++) movement.Tick(12.0 * beat / frames);
                     float expectedTravel = movement.CurrentSpeed * beat * 6;
                     Check(Mathf.Abs(root.transform.position.x - expectedTravel) < .0001f,
-                        $"Beat-locked motion preserves average speed across frame sizes: expected {expectedTravel}, got {root.transform.position.x}");
+                        $"Even-beat movement halves original travel across frame sizes: expected {expectedTravel}, got {root.transform.position.x}");
                     Check(pulses.SequenceEqual(new[] { 1, 2, 3, 1, 2, 3 }), "Every Green pulses once before any repeats");
                     grid.Model.Remove(1);
                     grid.Model.SetColor(2, EnemyColor.Blue);
@@ -38,21 +38,44 @@ namespace CandyCruisers.Editor
                     movement.Tick(100);
                     Check(pulses.Count == 7, "Pause cannot accrue movement");
                     movement.enabled = true;
-                    movement.Tick(beat * .75);
+                    movement.Tick(beat * 1.75);
                     Check(pulses.Count == 8, "Resume preserves partial beat progress");
                     movement.Tick(beat * .25);
                     movement.ResetSweep();
                     movement.Tick(beat * .5);
                     Check(root.transform.position.x == 0 && pulses.Count == 8, "New wave discards previous partial movement");
                     grid.Model.TryAdd(4, EnemyColor.Green, 0, 0);
-                    movement.Tick(2 * beat);
+                    movement.Tick(4 * beat);
                     Check(pulses.Skip(8).SequenceEqual(new[] { 4, 3 }), "New Greens join deterministic row order after reset");
                     Check(grid.Model.TryAdd(5, EnemyColor.Green, 3, 0), "New Green occupies an empty cell");
-                    movement.Tick(beat);
+                    movement.Tick(2 * beat);
                     Check(pulses.Last() == 5, "A joining Green gets a turn before an earlier Green repeats");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
             }
+            var cadenceRoot = new GameObject("Even beat fixture", typeof(EnemyGrid), typeof(EnemyGridMovement));
+            try
+            {
+                var grid = cadenceRoot.GetComponent<EnemyGrid>();
+                grid.Model.TryAdd(1, EnemyColor.Green, 0, 0);
+                var movement = cadenceRoot.GetComponent<EnemyGridMovement>();
+                float beat = FullSetCelebration.StepDuration;
+                movement.Tick(beat * .99);
+                Check(cadenceRoot.transform.position.x == 0, "Count one holds the fleet still");
+                movement.Tick(beat * .01);
+                float onTwo = cadenceRoot.transform.position.x;
+                Check(Mathf.Abs(onTwo - movement.CurrentSpeed * beat) < .0001f,
+                    "Count two moves the fleet by the original single-beat distance");
+                movement.Tick(beat);
+                Check(cadenceRoot.transform.position.x == onTwo, "Count three holds the fleet still");
+                movement.Tick(beat);
+                Check(Mathf.Abs(cadenceRoot.transform.position.x - 2 * onTwo) < .0001f,
+                    "Count four moves the fleet again");
+                movement.Tick(beat);
+                Check(Mathf.Abs(cadenceRoot.transform.position.x - 2 * onTwo) < .0001f,
+                    "The next downbeat holds the fleet still");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(cadenceRoot); }
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
                 var green = ProgressionChecks.Add(grid, EnemyColor.Green, 0, 0);
@@ -62,18 +85,15 @@ namespace CandyCruisers.Editor
                 visual.MovementPulse();
                 Check(green.Visuals.Body.color != resting, "Selected Green visibly flashes");
                 var bolts = green.GetComponentsInChildren<LineRenderer>().Where(line => line.name.StartsWith("Green surge")).ToArray();
-                Check(bolts.Length == 16 && bolts.All(line => line.enabled && !line.useWorldSpace),
-                    "Green surge has a corona, four branches and three bright arrow bolts that follow the enemy");
-                var arrows = green.GetComponentsInChildren<LineRenderer>()
-                    .Where(line => line.name.StartsWith("Green surge arrow core")).ToArray();
-                Check(arrows.Length == 3 && arrows.All(line => line.GetPosition(2).x > line.GetPosition(0).x),
-                    "Rightward Green pulse draws clear arrowheads pointing with fleet motion");
+                Check(bolts.Length == 10 && bolts.All(line => line.enabled && !line.useWorldSpace),
+                    "Green sparks have a corona and four electrical branches that follow the enemy");
+                Check(!green.GetComponentsInChildren<LineRenderer>().Any(line => line.name.Contains("arrow")),
+                    "Green electricity contains no arrows");
                 Vector3 point = bolts[0].GetPosition(1);
                 visual.Tick(.06f, EnemyColor.Green, 0);
                 Check(bolts[0].GetPosition(1) != point, "Electricity changes shape during the pulse");
                 visual.MovementPulse(-1);
-                Check(arrows.All(line => line.GetPosition(2).x < line.GetPosition(0).x),
-                    "Leftward Green pulse flips the arrowheads with fleet motion");
+                Check(bolts.All(line => line.enabled), "Leftward movement uses the same electrical sparks");
                 visual.Tick(EnemyPresentation.MovementPulseSeconds, EnemyColor.Green, 0);
                 Check(bolts.All(line => !line.enabled), "Electrical arcs disappear after the pulse");
                 Check(green.Visuals.Body.color == resting, "Pulse returns to original color without changing geometry");
@@ -81,7 +101,7 @@ namespace CandyCruisers.Editor
                 visual.Clear();
                 Check(bolts.All(line => !line.enabled), "Disabling or recoloring cannot leave electricity behind");
             });
-            Debug.Log("Fleet tick checks passed: beat-locked ticks, average speed, frame timing, Green rotation, removals, pause, reset and pulse visuals.");
+            Debug.Log("Fleet tick checks passed: counts two and four, half-speed travel, frame timing, Green rotation, removals, pause, reset and electrical sparks.");
         }
         public static void CapturePreview()
         {
@@ -93,6 +113,11 @@ namespace CandyCruisers.Editor
             green.GetComponent<EnemyPresentation>().MovementPulse();
             GameplayChecks.Capture(540, 960, "green-electric-surge");
             GameplayChecks.Capture(960, 540, "green-electric-surge-landscape");
+            green.GetComponent<EnemyPresentation>().Clear();
+            var purple = ProgressionChecks.Add(grid, EnemyColor.Purple, 2, 1);
+            purple.GetComponent<EnemyPresentation>().SummonFlash();
+            GameplayChecks.Capture(540, 960, "purple-summon-flash");
+            GameplayChecks.Capture(960, 540, "purple-summon-flash-landscape");
         }
         private static void Check(bool value, string message)
         { if (!value) throw new Exception("Fleet tick check failed: " + message); }

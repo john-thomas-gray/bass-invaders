@@ -201,6 +201,16 @@ namespace CandyCruisers
             return point + miter * scale;
         }
 
+        public void AddShotLaneBoundaries(List<float> positions, float radius)
+        {
+            foreach (var edge in edges)
+            {
+                float a = transform.TransformPoint(edge.A).x, b = transform.TransformPoint(edge.B).x;
+                positions.Add(Mathf.Min(a, b) - .0175f - radius + .00001f);
+                positions.Add(Mathf.Max(a, b) + .0175f + radius - .00001f);
+            }
+        }
+
         public bool FindHit(Vector3 origin, float from, float to, float radius, out int id, out float distance)
         {
             id = 0;

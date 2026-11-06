@@ -52,11 +52,11 @@ namespace CandyCruisers.Editor
                 {
                     var cue = (PresentationCue)typeof(GameSession).GetField("deathCue",
                         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(session);
-                    var burst = cue.GetComponentInChildren<PlayerFatalDustBurst>();
-                    Check(burst != null && burst.GetComponent<MeshRenderer>().enabled,
-                        "The active fatal death cue displays the player's space dust");
+                    var burst = cue.GetComponentInChildren<PlayerMeltDeath>();
+                    Check(burst != null && burst.GetComponentsInChildren<SpriteRenderer>().Any(sprite => sprite.enabled),
+                        "The active fatal death cue displays the dizzy player");
                 }
-                session.Tick(PlayerFatalDustBurst.Duration - .46f);
+                session.Tick(PlayerMeltDeath.Duration - .46f);
                 Check(session.State == GameSession.RunState.Dying, "Game over waits for the whole death animation");
                 session.Tick(.02f);
                 Check(session.State == GameSession.RunState.GameOver && defeats == 1, "Game over follows animation exactly once");
@@ -138,10 +138,10 @@ namespace CandyCruisers.Editor
                     {
                         elapsed += step;
                         session.Tick(step);
-                        Check(shatters == (elapsed >= fade + PlayerDeathBurst.ShatterSoundSeconds ? 1 : 0),
-                            "Shatter audio leads the visual fracture without drifting on short or long frames");
+                        Check(shatters == 0,
+                            "The melt never plays explosion audio, even on short or long frames");
                         Check(defeats == (elapsed >= fade ? 1 : 0), "Death hooks cannot run before the fade finishes");
-                        Check(elapsed < fade + PlayerFatalDustBurst.Duration ? session.State == GameSession.RunState.Dying :
+                        Check(elapsed < fade + PlayerMeltDeath.Duration ? session.State == GameSession.RunState.Dying :
                             session.State == GameSession.RunState.GameOver,
                             "Only time beyond the fade boundary advances the death animation, even on long frames");
                         if (elapsed < fade)
@@ -160,12 +160,12 @@ namespace CandyCruisers.Editor
                                 music.Source.volume > 0, "Fatal music slows and fades while the blackout is advancing");
                         else
                             Check(!music.ShouldPlayMusic && !music.Source.isPlaying && music.Source.volume == 0,
-                                "Music is silent before the fatal dust and shatter begin");
+                                "Music is silent before the dizzy eyes and melt begin");
                     }
                     session.Tick(10);
-                    Check(shatters == 1 && defeats == 1 && session.GameOverBlackoutOpacity == 1 &&
+                    Check(shatters == 0 && defeats == 1 && session.GameOverBlackoutOpacity == 1 &&
                         Mathf.Abs(session.GameOverBlackoutSeconds - fade) < .0001f,
-                        "Final blackout holds and the shatter never repeats after death completion");
+                        "Final blackout holds without explosion audio after death completion");
                 });
         }
 

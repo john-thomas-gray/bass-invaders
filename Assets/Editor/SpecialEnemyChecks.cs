@@ -606,7 +606,7 @@ namespace CandyCruisers.Editor
                 var spawner = root.GetComponent<EnemyRowSpawner>();
                 spawner.Configure(Prefab(EnemyColor.Blue), Prefab(EnemyColor.Red));
                 spawner.ConfigureNewTypes(Prefab(EnemyColor.Green), Prefab(EnemyColor.Purple), Prefab(EnemyColor.Yellow), Prefab(EnemyColor.Orange));
-                spawner.ConfigureSpecialSprite(AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/space-invader-squid.png"));
+                spawner.ConfigureSpecialSprite(AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/space-invader-sentinel.png"));
                 grid.ConfigureAbilities(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Red Missile.prefab"),
                     AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/ShieldArc.png"));
                 var body = controller.GetComponentInChildren<SpriteRenderer>();

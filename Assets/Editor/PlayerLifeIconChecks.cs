@@ -281,8 +281,13 @@ namespace CandyCruisers.Editor
                 Check(PlayerLifeIcons.LossDisplayRect(resting, destination, 1) == destination,
                     "Spent slime lands at the player position rather than breaking apart");
                 if (slot > 0)
-                    Check(Mathf.Abs(resting.xMin - PlayerLifeIcons.IconRect(row, slot - 1).xMax - 4) < .001f,
-                        "Life slots retain their compact fixed spacing");
+                {
+                    var previous = PlayerLifeIcons.IconRect(row, slot - 1, PlayerLifeIcons.BeatScale(0));
+                    float currentLeft = pulsing.center.x - pulsing.width * 1.35f / 2;
+                    float previousRight = previous.center.x + previous.width * 1.35f / 2;
+                    Check(currentLeft - previousRight >= 3.999f,
+                        "Fixed life slots leave four pixels between icons at maximum magic growth");
+                }
                 Check(PlayerLifeIcons.ApexSeconds - PlayerLifeIcons.AnticipationSeconds >= .3f,
                     "The takeoff has enough time to read before the apex handoff");
                 var beforeRise = PlayerLifeIcons.LossDisplayRect(resting, destination, PlayerLifeIcons.AnticipationProgress);

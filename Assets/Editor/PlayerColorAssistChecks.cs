@@ -111,8 +111,10 @@ namespace CandyCruisers.Editor
                 Check(player.Fire(), "Color-clear preview fires");
                 while (tongue.Active && !tongue.Retracting) tongue.Tick(.005f, grid);
                 Check(tongue.Active && player.MagicCharges > 0 && !tongue.IsMagic &&
-                    tongue.GetComponent<LineRenderer>().colorGradient.colorKeys.Length == 5,
-                    "A newly earned magic charge gives the returning ordinary tongue a rainbow preview");
+                    tongue.GetComponent<LineRenderer>().colorGradient.colorKeys.Length == 5 &&
+                    tongue.GetComponent<LineRenderer>().positionCount == 33 &&
+                    CloseColor(tongue.TipBulb.color, EnemyPalette.Get(EnemyColor.Purple)),
+                    "The first returning frame renders the full rainbow and its purple tip before dust absorption");
                 tongue.Tick(10, grid);
                 player.transform.position = new Vector3(-2.9f, -4.6f, 0);
                 Check(player.Fire() && tongue.IsMagic && player.MagicCharges == 0, "Next shot spends the magic charge");

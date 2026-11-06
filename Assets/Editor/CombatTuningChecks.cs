@@ -24,11 +24,11 @@ namespace CandyCruisers.Editor
                 float beat = FullSetCelebration.StepDuration;
                 Near(movement.CurrentSpeed, .03f, "One Green supplies base movement");
                 movement.Tick(beat);
-                Near(root.transform.position.x, .03f * beat, "One Green advances one beat-sized tick");
+                Near(root.transform.position.x, .03f * beat, "One Green advances one beat of travel on count two");
                 grid.Model.TryAdd(2, EnemyColor.Green, 2, 0);
                 Near(movement.CurrentSpeed, .06f, "Two Greens double movement");
-                movement.Tick(beat);
-                Near(root.transform.position.x, .09f * beat, "Two Greens double the next tick length");
+                movement.Tick(2 * beat);
+                Near(root.transform.position.x, .09f * beat, "Two Greens double the next tick length on count four");
                 grid.Model.Remove(1);
                 Near(movement.CurrentSpeed, .03f, "Removing Green immediately slows fleet");
                 grid.Model.SetColor(2, EnemyColor.Blue);

@@ -65,10 +65,12 @@ namespace CandyCruisers.Editor
                     var catalog = LevelCatalog.Parse(LevelProgressionChecks.FixtureJson);
                     var first = catalog.levels[0];
                     first.backgroundImage = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/galaxy.jpeg");
+                    catalog.levels[1].fleets[0].initialFleet[0] = "0b*b*b";
+                    catalog.levels[1].fleets[0].lineSpawns = new[] { "******" };
                     session.LevelCatalog = catalog; session.PresentationPreview = true; session.StartLevel = 1;
                     session.StartRun();
-                    Check(session.Progress.PreviousThreshold == 0 && session.Progress.NextThreshold == 13,
-                        "Live run uses the configured JSON first-level defeat target");
+                    Check(session.Progress.ClearedFleets == 0 && session.Progress.FleetsToClear == 2 && session.Progress.Defeated == 0,
+                        "Live run starts with zero completed fleets out of the two scripted entries");
                     Check(session.DisplayedColorClearBarColors.SequenceEqual(session.Fleet.PendingPlan.Colors) &&
                         session.DisplayedColorClearBarColors.Count == 3, "Opening bars show the reserved three colors before any enemy arrives");
                     stage = 1;
@@ -101,39 +103,78 @@ namespace CandyCruisers.Editor
                     for (int column = 0; column < line.Length; column++)
                         Check(grid.Model.At(column, 0)?.Color == line[column], "Live incoming line shares the opening's numbered assignments");
                     CheckNarrowRows(grid, 5);
-                    session.Progress.RegisterClear(session.Progress.NextThreshold - session.Progress.Defeated - 1, false);
+                    var partial = grid.GetComponentsInChildren<GridEnemy>().First();
+                    grid.ClearMatchingChain(partial.Id, partial.Color);
+                    Check(grid.Model.Count > 0 && session.Progress.Level == 1 && session.Progress.ClearedFleets == 0 &&
+                        session.Progress.ActiveLevelProgressFraction == 0, "A live partial clear cannot complete a fleet");
                     foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>().ToArray())
                         if (grid.View(enemy.Id) != null) grid.ClearMatchingChain(enemy.Id, enemy.Color);
-                    Check(session.Progress.Level == 2 && session.State == GameSession.RunState.Refilling, "Live fleet clear advances to level two");
-                    Check(session.Progress.PreviousThreshold == 13 && session.Progress.NextThreshold == 50,
-                        "Live advancement uses the second level's additional defeat target");
+                    Check(session.Progress.Level == 1 && session.Progress.ClearedFleets == 1 && session.State == GameSession.RunState.Refilling &&
+                        session.Progress.ActiveLevelProgressFraction == .5f && session.Fleet.PendingPlan.Rows == 2,
+                        "The first live full clear stays in level one and reserves its second scripted fleet");
+                    spawned = 0;
                     stage = 3;
                 }
                 else if (stage == 3 && session.State == GameSession.RunState.Refilling)
                 {
-                    Check(session.Fleet.Count == 0 && session.Fleet.PendingPlan.Colors.Count == 1 &&
+                    Check(session.Fleet.Count == 0 && session.Fleet.PendingPlan.Colors.Count == 3 &&
                         session.DisplayedColorClearBarColors.SequenceEqual(outgoingColors),
-                        "Every refill frame keeps the three outgoing slots while one incoming color waits separately");
+                        "A same-level refill keeps its outgoing bars until the next scripted fleet arrives");
                 }
                 else if (stage == 3 && session.State == GameSession.RunState.Playing)
                 {
+                    if (spawned == 0) spawned = EditorApplication.timeSinceStartup;
+                    if (EditorApplication.timeSinceStartup - spawned < .9f) return;
+                    Check(grid.Model.Count == 10 && session.Progress.Level == 1 && session.Progress.ActiveLevelProgressFraction == .5f &&
+                        session.Fleet.ActivePlan.Rows == 2 && background.enabled,
+                        "The second scripted fleet plays in the same level with half the progress bar filled");
+                    ScreenCapture.CaptureScreenshot("TestResults/fleet-progress-half-" + SessionState.GetString(Pending + ".Size", "desktop") + ".png");
+                    stage = 4;
+                }
+                else if (stage == 4)
+                {
+                    outgoingColors = session.Fleet.PresentColors().ToArray();
+                    foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>().ToArray())
+                        if (grid.View(enemy.Id) != null) grid.ClearMatchingChain(enemy.Id, enemy.Color);
+                    Check(session.Progress.Level == 2 && session.Progress.ClearedFleets == 0 && session.Progress.FleetsToClear == 1 &&
+                        session.State == GameSession.RunState.Refilling && session.Fleet.PendingPlan.Colors.SequenceEqual(new[] { EnemyColor.Blue }),
+                        "Clearing the final scripted fleet advances exactly once and reserves the new level's first fleet");
+                    stage = 5;
+                }
+                else if (stage == 5 && session.State == GameSession.RunState.Refilling)
+                {
+                    Check(session.Fleet.Count == 0 && session.DisplayedColorClearBarColors.SequenceEqual(outgoingColors),
+                        "The level transition keeps its outgoing colors until arrival");
+                }
+                else if (stage == 5 && session.State == GameSession.RunState.Playing)
+                {
                     Check(grid.Model.Count == 15 && grid.Model.ColorCount(EnemyColor.Blue) == 15,
-                        "Live refill uses the next level's three lines and Blue-only palette");
+                        "Live refill resolves opening stars within the next level's Blue-only palette");
                     Check(!background.enabled && (music.Source.clip == null || music.Source.clip.name == "Contact"),
                         "Live level transition restores black and changes the allowed soundtrack");
                     Check(session.DisplayedColorClearBarColors.SequenceEqual(new[] { EnemyColor.Blue }) &&
                         session.Fleet.ClearedColorCount == 0 && session.Fleet.ActivePlan.Columns == grid.GetComponent<EnemyRowSpawner>().CurrentRowWidth,
                         "Arrival changes slots, color counts, dimensions and reward flags together");
-                    ScreenCapture.CaptureScreenshot("TestResults/fleet-bars-next-" + SessionState.GetString(Pending + ".Size", "desktop") + ".png");
-                    finished = EditorApplication.timeSinceStartup; stage = 4;
+                    Check(grid.GetComponent<EnemyRowSpawner>().TryAdvance() && grid.Model.Count == 21,
+                        "A live incoming wildcard line adds six cells to the existing fleet");
+                    for (int column = 0; column < 6; column++)
+                        Check(grid.Model.At(column, 0)?.Color == EnemyColor.Blue, "Live incoming stars use only the captured opening palette");
+                    finished = EditorApplication.timeSinceStartup; stage = 6;
                 }
-                else if (stage == 4 && EditorApplication.timeSinceStartup - finished > .25f)
+                else if (stage == 6 && EditorApplication.timeSinceStartup - finished > 1f)
+                {
+                    Check(grid.GetComponentsInChildren<GridEnemy>().All(enemy => enemy.Visuals.Body.transform.lossyScale.x > .01f),
+                        "Opening and incoming wildcard enemies finish their arrival animation");
+                    ScreenCapture.CaptureScreenshot("TestResults/fleet-bars-next-" + SessionState.GetString(Pending + ".Size", "desktop") + ".png");
+                    finished = EditorApplication.timeSinceStartup; stage = 7;
+                }
+                else if (stage == 7 && EditorApplication.timeSinceStartup - finished > .25f)
                 {
                     DeveloperOptions.PlayerInvincible = previousInvincibility;
                     SpawnOverride.Enabled = previousOverride;
                     SessionState.SetBool(Pending, false);
                     Debug.Log("Level progression runtime checks passed: " + SessionState.GetString(Pending + ".Size", "desktop") +
-                        ", JSON source, sparse opening, round-wide assignments, incoming line, required colors, level change, refill, bars, background and soundtrack selection.");
+                        ", JSON source, sparse opening, round-wide assignments, opening and incoming wildcards, required colors, partial clears, every scripted fleet, progress bar, level change, refill, bars, background and soundtrack selection.");
                     EditorApplication.Exit(0);
                 }
             }

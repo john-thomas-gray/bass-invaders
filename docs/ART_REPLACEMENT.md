@@ -2,17 +2,29 @@
 
 ## Player Death
 
-Fatal fleet contact and recoverable player hits invoke `CharacterVisuals.PlayerDefeat`, including the normal
+Recoverable player hits invoke `CharacterVisuals.PlayerDefeat`, including the normal
 Defeated event and Animator trigger. The player's existing defeat-prefab slot
 replaces the entire placeholder, including its duration or completion event.
 With no prefab assigned, recoverable hits use `PlayerDeathBurst`: it snapshots
 the body and eyes, flashes white, then scatters colored fragments for 0.9 seconds.
-Fatal game-over hits use `PlayerFatalDustBurst` instead, throwing multicolored
-space-dust from every currently unlocked enemy color into a dense, uneven spray.
-The 2.4-second burst batches 960 soft grains into one mesh, with approaching grains
-growing as they spread. `FatalImpactBackdrop` adds the nearly upright, eight-degree
-tilted shockwave disc: a white crest, feathered edges and a close trailing ripple.
-The near edge thickens as the ring expands beyond the frame; there is no fire plume.
+Fatal game-over hits invoke `CharacterVisuals.PlayerFatalDefeat`.
+`GameOverBlackout` keeps the left pupil spinning counterclockwise and the right
+clockwise throughout the four-beat rise. At centerstage, `PlayerMeltDeath`
+continues each orbit through a final 180-degree turn over 0.8 seconds, easing to a
+stop at the authored default gaze. The round pupils morph into thicker X's during
+that same half-turn. The X diameter is 30 percent smaller than the original version.
+After a short hold, one silhouette continuously flattens and widens as its color
+fades to white. A single smooth curve carries it from the body into a thin white
+horizontal line that reaches both physical screen edges, with no pause at a
+puddle stage.
+It then contracts into a small white point and fades out like a tube television
+switching off. The 2.8-second cue snapshots the current body and face; its floor
+stays fixed as it collapses. The original body hands off at the same size and
+position; facial features fade before flattening into stray strips. Line width
+follows the camera viewport, including after a phone rotation. The line
+and final point retain a minimum pixel thickness on small screens.
+No explosion, shockwave, colored dust or shattering sound accompanies final death.
+The four-beat blackout moves the artwork to centerstage before this cue starts.
 The real sprites stay hidden until the scene restarts for
 fatal contact, or until respawn after a recoverable hit. Unlike enemy defeats, it
 never displays a digit.
@@ -57,7 +69,30 @@ Open the relevant enemy prefab under `Assets/Prefabs` and replace the sprite on
 `Visuals/Body`. Keep its body reference assigned on `CharacterVisuals`. Fit the
 new artwork using the Body child's scale and offset; leave the gameplay root
 and its saved hit bounds alone. Use the spawner's existing `Special Sprite`
-slot to replace the shared tier-two triangle.
+slot to replace the shared special design. Orange shares this slot, including
+when imitated by Yellow.
+
+The unchanged supplied sheet remains at `Assets/Resources/EnemyBeatSheet.png`.
+The editor command copies its six 64 by 64 frames into
+`Assets/Resources/EnemyBeatFrames.png`, adding two transparent pixels around
+each frame. Sprite rectangles cover only the original pixels; the surrounding
+margin prevents sampling slivers from adjacent enemies during animation.
+The leftmost source pair is Regular A/B, the middle pair is retained for
+reference, and the rightmost pair is Special A/B. Centered full-rectangle sprites,
+point filtering, original transparency, no mesh extrusion, no mipmaps and no texture compression
+preserve the pixels on desktop and iOS (iPhone Operating System). The import
+scale keeps the previous sprite width so shield sizing and saved hitboxes stay
+consistent. The previous normal, squid, sentinel and fruit artwork remains in
+`Assets/Art`.
+
+`CharacterVisuals.RefreshBeat` selects a frame through `EnemyBeatSprites` from
+the whole-number song beat: A on even beats and B on odd beats. It uses the same
+tempo map as the existing beat pulse, so new arrivals immediately join the same
+frame, skipped rendering frames do not cause drift, and pausing music freezes
+the frame. Yellow's displayed copy and transformation overlay follow the same
+frame. Art outside those two pairs is left alone. The editor command
+`Candy Cruisers > Use Beat Enemy Sprites` reapplies the sheet and prefab/scene
+assignments while retaining the old assets.
 
 For animated sprite sheets, put an Animator on `Visuals`, assign it to the
 actor's `CharacterVisuals.Animator` field, and animate the Body child's sprite
@@ -119,6 +154,11 @@ the grid also cleans up its detached match/death effects.
 saved visual-child hierarchies, animation-independent hit detection, accepted
 fire only, exactly-once match/defeat hooks, custom prefab replacement, color and
 depth context, delayed starts and cleanup without a clip completion event.
+It also runs `EnemyBeatSpriteChecks` for pixel-exact extraction, transparent
+sampling margins around all six frames, sheet regions, frame boundaries,
+30/60/120-frame timing, promotion, Yellow imitation and stable hitboxes.
+`EnemyBeatSpriteRuntimeChecks.RunDesktop` and `RunPhone` verify both designs
+against actual song playback, pause and resume at desktop and phone sizes.
 ## Special Blue Shield Shock
 
 A mismatched ordinary tongue hitting a special Blue shield emits a blue-white

@@ -9,6 +9,8 @@ namespace CandyCruisers.Editor
     {
         public static void Run()
         {
+            MagicPowerChecks.Run();
+            EnemyBeatSpriteChecks.Run();
             TongueTipChecks.Run();
             foreach (EnemyColor color in Enum.GetValues(typeof(EnemyColor)))
             {

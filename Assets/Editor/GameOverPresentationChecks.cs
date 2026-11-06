@@ -9,7 +9,7 @@ namespace CandyCruisers.Editor
     [InitializeOnLoad]
     public static class GameOverPresentationChecks
     {
-        private const string FatalPlayCheck = "CandyCruisers.FatalExplosionChecks";
+        private const string FatalPlayCheck = "CandyCruisers.FatalMeltChecks";
 
         public static void RunSummaryChecks()
         {
@@ -30,7 +30,7 @@ namespace CandyCruisers.Editor
 
         static GameOverPresentationChecks() => EditorApplication.update += PollFatalPlayCheck;
 
-        public static void RunFatalExplosionInPlayMode()
+        public static void RunFatalMeltInPlayMode()
         {
             UnityEditor.SceneManagement.EditorSceneManager.OpenScene(GameplaySetup.ScenePath);
             SessionState.SetBool(FatalPlayCheck, true);
@@ -39,34 +39,36 @@ namespace CandyCruisers.Editor
 
         private static void PollFatalPlayCheck()
         {
-            if (!SessionState.GetBool(FatalPlayCheck, false) || !EditorApplication.isPlaying || Time.timeSinceLevelLoad < .2f) return;
+            if (!SessionState.GetBool(FatalPlayCheck, false) || !EditorApplication.isPlaying || Time.timeSinceLevelLoad < GameSession.EpilepsyWarningSeconds + .5f) return;
             SessionState.SetBool(FatalPlayCheck, false);
             try
             {
+                using var metronomes = new MetronomeCheckSettings();
                 Run();
                 PlayerDeathChecks.Run();
-                Debug.Log("Fatal explosion Play mode checks passed.");
+                Debug.Log("Fatal melt Play mode checks passed.");
                 EditorApplication.Exit(0);
             }
             catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
         }
 
-        public static void RenderFatalExplosionPreview()
+        public static void RenderFatalMeltPreview()
         {
             UnityEditor.SceneManagement.EditorSceneManager.OpenScene(GameplaySetup.ScenePath);
-            System.IO.Directory.CreateDirectory("TestResults/fatal-explosion-frames");
-            CaptureFatalExplosion(true);
+            System.IO.Directory.CreateDirectory("TestResults/fatal-melt-frames");
+            CaptureFatalMelt(true);
         }
 
-        [MenuItem("Candy Cruisers/Check Fatal Explosion")]
-        public static void RunFatalExplosionChecks()
+        [MenuItem("Candy Cruisers/Check Fatal Melt")]
+        public static void RunFatalMeltChecks()
         {
+            using var metronomes = new MetronomeCheckSettings();
             UnityEditor.SceneManagement.EditorSceneManager.OpenScene(GameplaySetup.ScenePath);
             System.IO.Directory.CreateDirectory("TestResults");
             Run();
             PlayerDeathChecks.Run();
-            CaptureFatalExplosion();
-            Debug.Log("Fatal explosion checks and portrait/landscape previews passed.");
+            CaptureFatalMelt();
+            Debug.Log("Fatal melt checks and portrait/landscape previews passed.");
         }
         public static void RunSpawnBorderChecks()
         {
@@ -91,10 +93,8 @@ namespace CandyCruisers.Editor
         {
             CheckBeats();
             CheckTransition();
-            CheckFatalPlayerDust();
-            CheckImpactParticles();
+            PlayerMeltDeathChecks.Run();
             CheckBlackoutRendering();
-            CheckShatterSpace();
             foreach (var size in new[] { new Vector2(320, 480), new Vector2(390, 844),
                 new Vector2(540, 960), new Vector2(960, 540), new Vector2(1920, 1080), new Vector2(568, 320),
                 new Vector2(1179, 2556) })
@@ -121,7 +121,7 @@ namespace CandyCruisers.Editor
                     summaryRect.height == 26 && GameSession.GameOverSummaryText(7, 123456) == "LEVEL 7    SCORE 123,456",
                     "Game-over summary shows the final level and score in a centered white-text slot beneath the title");
             }
-            Debug.Log("Game-over presentation checks passed: opposite beats, fixed hitboxes, shared wave crunch, fatal player dust, white fatal impact, unlocked-color shards, stereo shatter echo/reverb, music slowdown, four-beat player-only fade, title-only reveal and input gating.");
+            Debug.Log("Game-over presentation checks passed: opposite beats, fixed hitboxes, shared wave crunch, spinning pupils, X eyes, melted puddle, music slowdown, four-beat player-only fade, title-only reveal and input gating.");
         }
 
         public static void RunShatterAudio()
@@ -342,42 +342,36 @@ namespace CandyCruisers.Editor
                         grid.GetComponentInChildren<FatalImpactBackdrop>() == null && session.GameOverTitleOpacity == 0,
                         "After three beats the player is still intact and all later death effects are waiting");
                     session.Tick(session.GameOverBlackoutSeconds / 4);
-                    var impact = grid.GetComponentInChildren<FatalImpactBackdrop>();
-                    Check(impact != null && impact.Active, "The impact begins once the four-beat fade has finished");
+                    Check(grid.GetComponentInChildren<FatalImpactBackdrop>() == null, "The melt never creates an impact backdrop");
                     Check(session.GameOverBlackoutOpacity == 1 && session.GameOverScoreOpacity == 0 && shatters == 0,
-                        "Everything behind the player reaches black before the fracture");
+                        "Everything behind the player reaches black before the dizzy-eye sequence");
                     Check(!music.ShouldPlayMusic && !music.Source.isPlaying && music.Source.volume == 0,
-                        "The imploding track reaches silence before the fatal dust and shatter");
+                        "The slowing track reaches silence before the dizzy eyes and melt");
                     var cover = grid.GetComponentInChildren<GameOverBlackout>().GetComponent<SpriteRenderer>();
                     Check(cover.enabled && cover.color == Color.black && cover.sortingOrder == GameOverBlackout.CoverOrder,
                         "A fully opaque black cover obscures enemies, projectiles, effects and rim");
                     if (Application.isPlaying)
                     {
                         var cue = (PresentationCue)typeof(GameSession).GetField("deathCue", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(session);
-                        Check(cue.GetComponent<UnityEngine.Rendering.SortingGroup>().sortingOrder > FatalImpactBackdrop.SortingOrder,
-                            "Player-death artwork renders above the blackout and impact, including replacement prefabs");
+                        Check(cue.GetComponent<UnityEngine.Rendering.SortingGroup>().sortingOrder > GameOverBlackout.CoverOrder,
+                            "Player-death artwork renders above the blackout, including replacement prefabs");
                         Check(Vector2.Distance(Camera.main.WorldToViewportPoint(cue.transform.position), Vector2.one * .5f) < .01f,
                             "Player-death artwork begins at centerstage after the blackout fade");
-                        Check(cue.GetComponentInChildren<PlayerFatalDustBurst>() != null &&
+                        Check(cue.GetComponentInChildren<PlayerMeltDeath>() != null &&
                             cue.GetComponentsInChildren<PlayerDeathBurst>().Length == 0,
-                            "Game-over death uses the fatal dust burst instead of the ordinary player shatter burst");
-                        Check(cue.GetComponentInChildren<PlayerFatalDustBurst>().GetComponent<MeshRenderer>().enabled,
-                            "Fatal player dust remains visible at full scene blackout");
+                            "Game-over death uses the eye-and-melt sequence instead of the ordinary player shatter burst");
+                        Check(cue.GetComponentInChildren<PlayerMeltDeath>().GetComponentsInChildren<SpriteRenderer>().Any(sprite => sprite.enabled),
+                            "The dizzy player remains visible at full scene blackout");
                     }
-                    session.Tick(PlayerDeathBurst.ShatterSoundSeconds + .0001f);
-                    Check(shatters == 1 && gameOverCues == 0 && session.State == GameSession.RunState.Dying,
-                        "The impact sound starts just ahead of the fatal dust fracture, without the old cadence");
-                    session.Tick(PlayerDeathBurst.ShatterSeconds - PlayerDeathBurst.ShatterSoundSeconds + .0001f);
+                    session.Tick(.0801f);
+                    Check(shatters == 0 && gameOverCues == 0 && session.State == GameSession.RunState.Dying,
+                        "The melt starts without an explosion or game-over sound");
+                    session.Tick(.0601f);
                     session.Tick(.3f);
-                    Check(shatters == 1 && session.GameOverTitleOpacity == 0, "Shatter is one-shot and death finishes before the title appears");
-                    foreach (var color in EnemyPalette.Colors)
-                        Check(ParticleCenters(impact, color).Length == (grid.Fleet.Colors.Contains(color) ? 8 : 0),
-                            "The fatal sequence uses the actual fleet palette rather than level unlocks");
-                    session.Tick(PlayerFatalDustBurst.Duration - PlayerDeathBurst.ShatterSeconds - .3f);
-                    Check(session.State == GameSession.RunState.GameOver && shatters == 1 && session.GameOverTitleOpacity == 0,
+                    Check(shatters == 0 && session.GameOverTitleOpacity == 0, "The silent eye-and-melt sequence finishes before the title appears");
+                    session.Tick(PlayerMeltDeath.Duration - .14f - .3f);
+                    Check(session.State == GameSession.RunState.GameOver && shatters == 0 && session.GameOverTitleOpacity == 0,
                         "Finishing death does not replay a sound or snap the title into view");
-                    Check(!impact.Active && !impact.GetComponent<MeshRenderer>().enabled,
-                        "Impact artwork ends before the game-over title fades in");
                     Check(!session.HandleMenuKey(KeyCode.Return) && !session.HandleMenuKey(KeyCode.R) && !session.HandleMenuKey(KeyCode.M),
                         "Early menu keys cannot bypass the fade");
                     Check(!(bool)typeof(GameSession).GetMethod("ActivateMenuTouch", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -398,16 +392,8 @@ namespace CandyCruisers.Editor
                     Check(session.GameOverTitleReady && session.GameOverTitleOpacity == 1, "Input unlocks only after the title is fully visible");
                     session.Tick(2);
                     Invoke(session, "EndGame");
-                    Check(gameOverCues == 0 && shatters == 1 && session.GameOverTitleReady && music.Source.volume == 0 && !music.ShouldPlayMusic &&
+                    Check(gameOverCues == 0 && shatters == 0 && session.GameOverTitleReady && music.Source.volume == 0 && !music.ShouldPlayMusic &&
                         !music.Source.isPlaying, "Repeated game-over calls never replay the cue or restart the music");
-                    var clip = sounds.GetClip(SoundEffect.PlayerShatter);
-                    var samples = new float[clip.samples * clip.channels];
-                    Check(clip.channels == 2 && Near(clip.length, ArcadeSoundClips.ShatterTailSeconds) &&
-                        clip.GetData(samples, 0) && samples.Any(value => Mathf.Abs(value) > .1f) &&
-                        samples.All(value => !float.IsNaN(value) && Mathf.Abs(value) < 1) && Mathf.Abs(samples.Last()) < .001f,
-                        "Stereo shattering audio is audible, unclipped and has a clean reverberant tail");
-                    Check(samples.Skip((int)(.8f * clip.frequency * clip.channels)).Any(value => Mathf.Abs(value) > .001f),
-                        "The actual shatter remains audibly reverberant after its original dry recording ends");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(frameRoot); }
             });
@@ -457,160 +443,13 @@ namespace CandyCruisers.Editor
         private static void Check(bool condition, string message)
         { if (!condition) throw new Exception("Game-over presentation check failed: " + message); }
 
-        private static void CheckImpactParticles()
-        {
-            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
-            {
-                foreach (int level in new[] { 1, 2, 3, 4, 5, 6, 8, 9, 19, 99 })
-                {
-                    grid.BeginColorCycle();
-                    var fleetColors = new[] { EnemyColor.Green, EnemyColor.Purple };
-                    var green = ProgressionChecks.Add(grid, fleetColors[0], 0, 0);
-                    var purple = ProgressionChecks.Add(grid, fleetColors[1], 2, 0);
-                    var cover = GameOverBlackout.Create(grid.transform, null);
-                    try
-                    {
-                        cover.BeginImpact(player.transform.position, level);
-                        var impact = cover.GetComponentInChildren<FatalImpactBackdrop>();
-                        Check(impact.GetComponentsInChildren<SpriteRenderer>().All(particle => particle.sprite == EnemyPlaceholderArt.SpaceDust),
-                            "Fatal particles share the soft spacedust artwork");
-                        var mesh = impact.GetComponent<MeshFilter>().sharedMesh;
-                        var camera = EnsureCamera();
-                        Vector2 origin = camera.WorldToViewportPoint(player.transform.position);
-                        cover.Present(1, .07f);
-                        Check(mesh.vertexCount == 0, "The shockwave waits for detonation");
-                        float previousRadius = 0;
-                        foreach (float age in new[] { .24f, .5f, .9f, 1.4f })
-                        {
-                            cover.Present(1, age);
-                            var points = mesh.vertices.Select(vertex =>
-                                (Vector2)camera.WorldToViewportPoint(impact.transform.TransformPoint(vertex)) - origin).ToArray();
-                            float height = points.Max(point => point.y) - points.Min(point => point.y);
-                            float width = (points.Max(point => point.x) - points.Min(point => point.x)) * camera.aspect;
-                            Check(height > width * 3 && height > previousRadius,
-                                "The narrow upright shockwave keeps expanding through the late spray");
-                            Check(points.OrderByDescending(point => point.y).First().x < 0,
-                                "The shockwave leans left at the top, matching its tilted disc plane");
-                            Check(mesh.colors.Any(color => color.a == 0) && mesh.colors.Any(color => color.a > .6f),
-                                "Shockwave edges feather from a bright crest to transparent halos");
-                            previousRadius = height;
-                        }
-                        Check(previousRadius > Mathf.Min(1, camera.aspect) * 4,
-                            "The shockwave grows beyond the frame instead of stopping around the player");
-                        cover.Present(1, PlayerDeathBurst.ShatterSeconds);
-                        Check(mesh.colors.All(color => Near(color.r, color.g) && Near(color.g, color.b)),
-                            "Arcs and local shockwaves are neutral white, with no colored lightning");
-                        foreach (EnemyColor color in Enum.GetValues(typeof(EnemyColor)))
-                            Check(ParticleCenters(impact, color).All(point => Vector2.Distance(point, origin) < .001f),
-                                "Restored multicolor space dust starts at the player when the shatter begins");
-                        var random = UnityEngine.Random.state;
-                        cover.Present(1, .2f);
-                        var firstVertices = mesh.vertices;
-                        var firstColors = mesh.colors;
-                        var first = Enum.GetValues(typeof(EnemyColor)).Cast<EnemyColor>()
-                            .ToDictionary(color => color, color => ParticleCenters(impact, color));
-                        cover.Present(1, .4f);
-                        foreach (var pair in first)
-                        {
-                            Check(pair.Value.Length == (fleetColors.Contains(pair.Key) ? 8 : 0),
-                                "Only the actual fleet colors contribute shards regardless of level: " + pair.Key);
-                            var later = ParticleCenters(impact, pair.Key);
-                            for (int i = 0; i < pair.Value.Length; i++)
-                                Check(Vector2.Distance(later[i], origin) > Vector2.Distance(pair.Value[i], origin) + .02f,
-                                    "Each shard travels outward from the player's impact");
-                        }
-                        cover.Present(1, .2f);
-                        Check(mesh.vertices.SequenceEqual(firstVertices) && mesh.colors.SequenceEqual(firstColors) &&
-                            UnityEngine.Random.state.Equals(random),
-                            "Particle motion is deterministic at a given animation age and leaves gameplay randomness alone");
-                        cover.Present(1, FatalImpactBackdrop.Duration);
-                        Check(!impact.Active && !impact.GetComponent<MeshRenderer>().enabled,
-                            "All shards and shockwaves disappear before the game-over title appears");
-                    }
-                    finally
-                    {
-                        UnityEngine.Object.DestroyImmediate(cover.gameObject);
-                        grid.Unregister(green); grid.Unregister(purple);
-                        UnityEngine.Object.DestroyImmediate(green.gameObject); UnityEngine.Object.DestroyImmediate(purple.gameObject);
-                    }
-                }
-            });
-        }
-
-        private static void CheckFatalPlayerDust()
-        {
-            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
-            {
-                const int level = 9;
-                ProgressionChecks.Add(grid, EnemyColor.Green, 0, 0);
-                ProgressionChecks.Add(grid, EnemyColor.Purple, 2, 0);
-                var body = CharacterVisuals.Ensure(player.gameObject).Body;
-                var random = UnityEngine.Random.state;
-                var cue = PresentationCue.Spawn(null, PresentationCue.Kind.PlayerFatalDust, body, EnemyColor.Blue, level);
-                try
-                {
-                    var burst = cue.GetComponentInChildren<PlayerFatalDustBurst>();
-                    var mesh = burst.GetComponent<MeshFilter>().sharedMesh;
-                    var unlocked = grid.Fleet.Colors.ToArray();
-                    Check(burst != null && cue.GetComponentsInChildren<PlayerDeathBurst>().Length == 0,
-                        "Fatal player death creates a dust burst, not the recoverable shatter burst");
-                    Check(mesh.vertexCount == PlayerFatalDustBurst.GrainCount * 4 &&
-                        burst.GetComponent<MeshRenderer>().sharedMaterial.mainTexture == EnemyPlaceholderArt.SpaceDust.texture,
-                        "The dense spray batches soft dust grains into one textured mesh");
-                    burst.Present(.4f);
-                    var first = DustCenters(mesh);
-                    var firstVertices = mesh.vertices;
-                    burst.Present(1.4f);
-                    var later = DustCenters(mesh);
-                    Check(later.Zip(first, (after, before) => after.magnitude > before.magnitude * 3).All(value => value),
-                        "Every grain keeps spreading through the late explosion");
-                    float coreReach = later.Take(PlayerFatalDustBurst.CoreGrains).Average(point => point.magnitude);
-                    float sprayReach = later.Skip(PlayerFatalDustBurst.CoreGrains).Average(point => point.magnitude);
-                    Check(sprayReach > coreReach * 2 && later.Any(point => point.x < -3) && later.Any(point => point.x > 3) &&
-                        later.Any(point => point.y < -3) && later.Any(point => point.y > 3),
-                        "The fast outer spray surrounds a dense core and fills both axes, without a horizontal belt or rising plume");
-                    Check((mesh.vertices[1] - mesh.vertices[0]).magnitude > (firstVertices[1] - firstVertices[0]).magnitude,
-                        "Approaching powder grains grow with perspective");
-                    foreach (var color in unlocked)
-                    {
-                        var palette = EnemyPalette.Get(color);
-                        int count = mesh.colors.Count(tint =>
-                            Near(tint.r, palette.r) && Near(tint.g, palette.g) && Near(tint.b, palette.b));
-                        Check(count == PlayerFatalDustBurst.GrainCount * 4 / unlocked.Length,
-                            "Fatal player dust includes every unlocked color: " + color);
-                    }
-                    burst.Present(.4f);
-                    Check(mesh.vertices.SequenceEqual(firstVertices), "Dust sampling is deterministic when scrubbing animation time");
-                    burst.Present(PlayerFatalDustBurst.Duration);
-                    Check(!burst.GetComponent<MeshRenderer>().enabled && burst.GetComponentsInChildren<SpriteRenderer>().All(sprite => !sprite.enabled),
-                        "The flash and all dust disappear before the title");
-                    Check(UnityEngine.Random.state.Equals(random), "Fatal player dust leaves gameplay randomness alone");
-                }
-                finally { UnityEngine.Object.DestroyImmediate(cue.gameObject); }
-            });
-        }
-
-        private static Vector2[] ParticleCenters(FatalImpactBackdrop impact, EnemyColor enemyColor)
-        {
-            var palette = EnemyPalette.Get(enemyColor);
-            return impact.GetComponentsInChildren<SpriteRenderer>()
-                .Where(particle => Near(particle.color.r, palette.r) && Near(particle.color.g, palette.g) && Near(particle.color.b, palette.b))
-                .Select(particle => (Vector2)EnsureCamera().WorldToViewportPoint(particle.transform.position)).ToArray();
-        }
-
-        private static Vector3[] DustCenters(Mesh mesh)
-        {
-            var vertices = mesh.vertices;
-            return Enumerable.Range(0, vertices.Length / 4).Select(index => (vertices[index * 4] + vertices[index * 4 + 2]) / 2).ToArray();
-        }
-
         private static void CheckBlackoutRendering()
         {
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
                 UseChildPlayerArtwork(grid, player, tongue);
                 ProgressionChecks.Add(grid, EnemyColor.Red, 2, 0);
-                var cue = PresentationCue.Spawn(null, PresentationCue.Kind.PlayerDefeat,
+                var cue = PresentationCue.Spawn(null, PresentationCue.Kind.PlayerMelt,
                     CharacterVisuals.Ensure(player.gameObject).Body, EnemyColor.Blue, 1);
                 cue.enabled = false;
                 cue.Tick(.3f);
@@ -678,47 +517,6 @@ namespace CandyCruisers.Editor
                                             size.x + "x" + size.y + ".png", pixels.EncodeToPNG());
                                 }
                             }
-                            cover.BeginImpact(cue.transform.position, 9);
-                            Color32[] previousFrame = null;
-                            foreach (float age in new[] { .3f, .6f, FatalImpactBackdrop.Duration })
-                            {
-                                cover.Present(1, age);
-                                camera.Render();
-                                RenderTexture.active = target;
-                                pixels.ReadPixels(new Rect(0, 0, size.x, size.y), 0, 0);
-                                pixels.Apply();
-                                var data = pixels.GetPixels32();
-                                int white = 0, changed = 0, outside = 0;
-                                for (int i = 0; i < data.Length; i++)
-                                {
-                                    var pixel = data[i];
-                                    if (pixel.r > 50 && Math.Abs(pixel.r - pixel.g) < 4 && Math.Abs(pixel.g - pixel.b) < 4) white++;
-                                    if (previousFrame != null && !pixel.Equals(previousFrame[i])) changed++;
-                                    if (!region.Contains(new Vector2(i % size.x, i / size.x)) && pixel.r + pixel.g + pixel.b > 30) outside++;
-                                }
-                                // The upright ring is brightest on its near edge and expands in screen space.
-                                Check(age < FatalImpactBackdrop.Duration ? white > size.y / 2 : outside == 0,
-                                    "White local impact arcs stay visible, then fully clear back to black: " + size +
-                                    ", white=" + white + ", outside=" + outside);
-                                if (Near(age, .6f))
-                                    foreach (var color in grid.Fleet.Colors)
-                                    {
-                                        Color.RGBToHSV(EnemyPalette.Get(color), out float hue, out _, out _);
-                                        int colored = data.Count(pixel =>
-                                        {
-                                            Color.RGBToHSV(pixel, out float actualHue, out float saturation, out float value);
-                                            return saturation > .25f && value > .1f &&
-                                                Mathf.Abs(Mathf.DeltaAngle(hue * 360, actualHue * 360)) < 8;
-                                        });
-                                        Check(colored > 2, "Every actual fleet color has visible dispersed particles at " + size + ": " + color);
-                                    }
-                                if (previousFrame != null && age < FatalImpactBackdrop.Duration)
-                                    Check(changed > size.y * 2,
-                                        "The impact backdrop animates rather than remaining a static image: changed=" + changed);
-                                if (crunch == 0)
-                                    System.IO.File.WriteAllBytes("TestResults/fatal-impact-" + size.x + "x" + size.y + "-" + age.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + ".png", pixels.EncodeToPNG());
-                                previousFrame = data;
-                            }
                         }
                         finally
                         {
@@ -744,101 +542,7 @@ namespace CandyCruisers.Editor
             });
         }
 
-        private static void CaptureFatalExplosion(bool animation = false)
-        {
-            var camera = EnsureCamera();
-            var source = UnityEngine.Object.FindFirstObjectByType<PlayerMovement>().GetComponentInChildren<CharacterVisuals>().Body;
-            var cue = PresentationCue.Spawn(null, PresentationCue.Kind.PlayerFatalDust, source, EnemyColor.Blue, 9);
-            cue.enabled = false;
-            var burst = cue.GetComponentInChildren<PlayerFatalDustBurst>();
-            cue.transform.position -= burst.transform.position;
-            var cover = GameOverBlackout.Create(null, cue);
-            cover.BeginImpact(burst.transform.position, 9);
-            var previousTarget = camera.targetTexture;
-            var previousActive = RenderTexture.active;
-            try
-            {
-                foreach (var size in new[] { new Vector2Int(320, 480), new Vector2Int(540, 960), new Vector2Int(960, 540) })
-                {
-                    var target = new RenderTexture(size.x, size.y, 24);
-                    var pixels = new Texture2D(size.x, size.y, TextureFormat.RGB24, false);
-                    var ages = new[] { .22f, .45f, .8f, 1.2f, 1.65f, 2.15f };
-                    var strip = new Texture2D(size.x * ages.Length, size.y, TextureFormat.RGB24, false);
-                    try
-                    {
-                        camera.targetTexture = target;
-                        camera.GetComponent<GameplayFraming>().Refresh();
-                        Color32[] previousFrame = null;
-                        for (int frame = 0; frame < ages.Length; frame++)
-                        {
-                            float age = ages[frame];
-                            burst.Present(age);
-                            cover.Present(1, age);
-                            UnityEngine.Rendering.SortingGroup.UpdateAllSortingGroups();
-                            camera.Render();
-                            RenderTexture.active = target;
-                            pixels.ReadPixels(new Rect(0, 0, size.x, size.y), 0, 0);
-                            pixels.Apply();
-                            var data = pixels.GetPixels32();
-                            Check(data.Count(pixel => pixel.r + pixel.g + pixel.b > 40) > 100,
-                                "The complete fatal explosion stays visible at " + size + " and " + age);
-                            if (previousFrame != null)
-                                Check(data.Zip(previousFrame, (a, b) => !a.Equals(b)).Count(changed => changed) > 200,
-                                    "The rendered dust and shockwave keep moving at " + age);
-                            if (age > .4f && age < 2)
-                                foreach (EnemyColor color in Enum.GetValues(typeof(EnemyColor)))
-                                {
-                                    Color.RGBToHSV(EnemyPalette.Get(color), out float hue, out _, out _);
-                                    Check(data.Count(pixel =>
-                                    {
-                                        Color.RGBToHSV(pixel, out float actual, out float saturation, out float value);
-                                        return saturation > .35f && value > .12f &&
-                                            Mathf.Abs(Mathf.DeltaAngle(hue * 360, actual * 360)) < 10;
-                                    }) > 5, "Multicolored powder stays visible during the expanding spray: " + color);
-                                }
-                            strip.SetPixels32(frame * size.x, 0, size.x, size.y, data);
-                            System.IO.File.WriteAllBytes("TestResults/fatal-explosion-" + size.x + "x" + size.y + "-" +
-                                age.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + ".png", pixels.EncodeToPNG());
-                            previousFrame = data;
-                        }
-                        strip.Apply();
-                        System.IO.File.WriteAllBytes("TestResults/fatal-explosion-sequence-" + size.x + "x" + size.y + ".png", strip.EncodeToPNG());
-                        if (animation && size.x == 540)
-                            for (int frame = 0; frame < 84; frame++)
-                            {
-                                float age = frame / 30f;
-                                burst.Present(age);
-                                cover.Present(1, age);
-                                UnityEngine.Rendering.SortingGroup.UpdateAllSortingGroups();
-                                camera.Render();
-                                pixels.ReadPixels(new Rect(0, 0, size.x, size.y), 0, 0);
-                                pixels.Apply();
-                                System.IO.File.WriteAllBytes("TestResults/fatal-explosion-frames/" + frame.ToString("D3") + ".png", pixels.EncodeToPNG());
-                            }
-                        burst.Present(PlayerFatalDustBurst.Duration);
-                        cover.Present(1, PlayerFatalDustBurst.Duration);
-                        camera.Render();
-                        pixels.ReadPixels(new Rect(0, 0, size.x, size.y), 0, 0);
-                        Check(pixels.GetPixels32().All(pixel => pixel.r + pixel.g + pixel.b < 5),
-                            "The whole explosion clears to black before the title");
-                    }
-                    finally
-                    {
-                        camera.targetTexture = previousTarget;
-                        RenderTexture.active = previousActive;
-                        target.Release();
-                        UnityEngine.Object.DestroyImmediate(target);
-                        UnityEngine.Object.DestroyImmediate(pixels);
-                        UnityEngine.Object.DestroyImmediate(strip);
-                    }
-                }
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(cue.gameObject);
-                UnityEngine.Object.DestroyImmediate(cover.gameObject);
-            }
-        }
+        private static void CaptureFatalMelt(bool animation = false) => PlayerMeltDeathChecks.CapturePreview(animation);
 
         private static void CheckShatterSpace()
         {

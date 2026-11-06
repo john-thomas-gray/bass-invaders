@@ -12,7 +12,7 @@ Contact uses the outer edge of the logical cell, not sprite pixels or shields.
 This keeps movement stable when art changes or shield/animation visuals grow.
 The current scene uses an unrotated grid with positive horizontal scale.
 
-Horizontal average speed is proportional to the live Green count: 0.03 world
+Horizontal average speed is proportional to the live Green count: 0.015 world
 units per second per Green, multiplied by level scaling. Zero Greens means no
 motion. The numerical timing examples below assume one Green at level-one
 speed. `UseGreenDashes` retains the previous nonzero-base-speed mode, disabled
@@ -20,20 +20,22 @@ by default.
 
 ### Beat-Locked Ticks
 
-The default fleet moves once per current song beat instead of translating every
-frame or waiting on fixed 0.15-unit steps. Each beat tick travels the current
-average speed multiplied by the current beat duration, so Green count and level
-change tick length rather than tick cadence. The fallback editor beat uses the
+The default fleet moves on counts two and four of the current song, holding still
+on counts one and three. Each tick keeps the original single-beat distance,
+using the configured movement rate multiplied by the completed beat duration.
+Skipping the other two counts halves the average speed at a constant tempo.
+Green count and level change tick length rather than tick cadence. The fallback editor beat uses the
 default soundtrack tempo when no song is playing. The final beat at an edge can
 be shortened to preserve exact boundary timing, then any remaining beat distance
 is spent after the turn unless the callback stops or resets movement.
 
-Each beat tick flashes one live Green using `EnemyPresentation.MovementPulse`.
+Each movement tick sparks one live Green using `EnemyPresentation.MovementPulse`.
 The rotation starts in row/column order, then repeats; removed or recolored
 Greens are skipped and newly appearing Greens join the queue. Both ordinary
-and special Greens participate. The pulse changes only presentation tint,
-not collision geometry or ability cooldowns. Special-Green dashes remain a
-separate ability. Pause preserves partial beat progress; a new wave resets it.
+and special Greens participate. The pulse changes only presentation tint and
+electrical arcs without arrows. Collision geometry and ability cooldowns stay
+the same. Special-Green dashes remain a separate ability. Pause preserves partial
+beat progress; a new wave resets it.
 
 ## Geometry
 
@@ -48,14 +50,14 @@ local centers are:
 The implementation converts cell edges through the grid transform, rather than
 assuming its origin remains fixed. At unit scale, a level 1-6 row occupies
 columns 0-4, spans 3.75 units, and reaches the right edge when gridX is +1.5.
-At speed 0.03 units per second, that means 50 seconds to the first right contact
-from center and 75 seconds between opposite contacts if both outer columns remain
+At speed 0.015 units per second, that means about 100 seconds to the first right
+contact from center and 150 seconds between opposite contacts if both outer columns remain
 occupied. A level 7+ row occupies columns 0-5, spans 4.5 units, and reaches the
 right edge when gridX is +0.75.
 
 If column 4 is empty, the rightmost possible occupied column becomes 3. It must
 travel another 0.75 units before touching the right border. At the default
-speed, this adds 25 seconds. Clearing the last enemy in column 3 adds another
+speed, this adds about 50 seconds. Clearing the last enemy in column 3 adds another
 column's worth of travel. These are geometric consequences, not timers.
 
 ## Movement update
@@ -65,8 +67,8 @@ occupied columns. `EnemyGrid.OccupiedHorizontalBounds` converts their outer
 edges into world coordinates. Neither operation caches occupancy, so removals
 are reflected on the next movement update.
 
-`EnemyGridMovement.Tick` tracks beat position and only spends movement when a
-beat boundary is crossed. Long frames can process multiple beat ticks, and each
+`EnemyGridMovement.Tick` tracks beat position and only spends movement when the
+song crosses count two or four. Long frames can process multiple ticks, and each
 new tick reads the live Green count. `AdvanceDistance` handles each tick against
 the distance to the relevant border:
 

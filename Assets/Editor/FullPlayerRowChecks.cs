@@ -37,7 +37,7 @@ namespace CandyCruisers.Editor
                 session.Tick(session.GameOverBlackoutSeconds);
                 session.Tick(.45f);
                 Check(session.State == GameSession.RunState.Dying, "Death animation plays before game over");
-                session.Tick(PlayerFatalDustBurst.Duration - .45f + .01f);
+                session.Tick(PlayerMeltDeath.Duration - .45f + .01f);
                 Check(session.State == GameSession.RunState.GameOver, "Full-row death reaches game over");
             });
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>

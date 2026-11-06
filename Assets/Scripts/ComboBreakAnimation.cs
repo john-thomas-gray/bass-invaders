@@ -48,7 +48,8 @@ namespace CandyCruisers
         public void Draw(Rect resting, GUIStyle baseStyle, float opacity) =>
             Draw(resting, baseStyle, opacity, Screen.width, Screen.height);
 
-        public void Draw(Rect resting, GUIStyle baseStyle, float opacity, float screenWidth, float screenHeight, Color? liveTint = null)
+        public void Draw(Rect resting, GUIStyle baseStyle, float opacity, float screenWidth, float screenHeight, Color? liveTint = null,
+            float textGrowthScale = 1)
         {
             if (!Active) return;
             string text = "x" + Multiplier;
@@ -68,11 +69,17 @@ namespace CandyCruisers
             var tint = liveTint ?? Tint;
             tint.a = opacity * Opacity;
             GUI.color = tint;
-            if (Age < SplitStart) GUI.Label(rect, text, style);
+            if (Age < SplitStart)
+            {
+                var matrix = GUI.matrix;
+                GUI.matrix = MagicPowerPresentation.ElementMatrix(matrix, rect, textGrowthScale);
+                GUI.Label(rect, text, style);
+                GUI.matrix = matrix;
+            }
             else
             {
-                DrawHalf(rect, text, style, false);
-                DrawHalf(rect, text, style, true);
+                DrawHalf(rect, text, style, false, textGrowthScale);
+                DrawHalf(rect, text, style, true, textGrowthScale);
             }
             DrawSlash(rect, opacity);
             GUI.color = previous;
@@ -88,13 +95,17 @@ namespace CandyCruisers
             GUIUtility.RotateAroundPivot(Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg, from);
             GUI.color = new Color(1, 1, 1, opacity * SlashOpacity);
             float thickness = Mathf.Max(2, rect.height * .035f);
-            GUI.DrawTexture(new Rect(from.x, from.y - thickness / 2, delta.magnitude * SlashProgress, thickness), Texture2D.whiteTexture);
+            var slash = new Rect(from.x, from.y - thickness / 2, delta.magnitude * SlashProgress, thickness);
+            GUI.DrawTexture(slash, Texture2D.whiteTexture);
             GUI.matrix = previous;
         }
 
-        private void DrawHalf(Rect rect, string text, GUIStyle style, bool lower)
+        private void DrawHalf(Rect rect, string text, GUIStyle style, bool lower, float textGrowthScale)
         {
             rect.position += HalfOffset(rect.height, lower);
+            var matrix = GUI.matrix;
+            var half = new Rect(rect.x, rect.y + (lower ? rect.height / 2 : 0), rect.width, rect.height / 2);
+            GUI.matrix = MagicPowerPresentation.ElementMatrix(matrix, half, textGrowthScale);
             int strips = Mathf.Clamp(Mathf.CeilToInt(rect.width), 16, 512);
             // Pixel-aligned clips keep the diagonal halves solid as they slide apart.
             for (int i = 0; i < strips; i++)
@@ -108,6 +119,7 @@ namespace CandyCruisers
                 GUI.Label(new Rect(-left, -top, rect.width, rect.height), text, style);
                 GUI.EndGroup();
             }
+            GUI.matrix = matrix;
         }
     }
 }

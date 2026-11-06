@@ -8,7 +8,7 @@ namespace CandyCruisers.Editor
     public static class GameplayUpgrade
     {
         private const string EnemySpritePath = "Assets/Art/space-invader-normal.png";
-        private const string SpecialEnemySpritePath = "Assets/Art/space-invader-squid.png";
+        private const string SpecialEnemySpritePath = "Assets/Art/space-invader-sentinel.png";
         private const string MissileSpritePath = "Assets/Art/missile.png";
 
         public static void Apply()

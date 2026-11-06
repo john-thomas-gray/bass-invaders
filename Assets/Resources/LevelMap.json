@@ -1,248 +1,648 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "levels": {
     "1": {
-      "enemiesToDefeat": 20,
-      "numberOfColors": 2,
-      "possibleColors": [
-        "Red",
-        "Blue"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "0r0r0r",
-        "brbrbr",
-        "0r0r0r/b0b0b0",
-        "0r0r0r",
-        "brbrbr"
-      ],
-      "lineSpawns": [
-        "0r0r0r",
-        "brbrbr"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "r0rr0r"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "brbrbr"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "b0bb0b",
+            "r0rr0r"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "r0rr0r",
+            "b0bb0b"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "rrbbrr",
+            "bbrrbb"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "bbrrbb",
+            "rrbbrr"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue"
+          ],
+          "initialFleet": [
+            "rrbbrr",
+            "rbrrbr",
+            "bb00bb"
+          ],
+          "lineSpawns": []
+        }
       ]
     },
     "2": {
-      "enemiesToDefeat": 40,
-      "numberOfColors": 2,
-      "possibleColors": [
-        "Blue",
-        "Purple"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "0b0b0b",
-        "pbpbpb",
-        "0p0p0p/b0b0b0",
-        "0b0b0b",
-        "pbpbpb",
-        "0p0p0p/b0b0b0",
-        "0b0b0b",
-        "pbpbpb",
-        "0p0p0p/b0b0b0"
-      ],
-      "lineSpawns": [
-        "bpbpbp",
-        "pbpbpb"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Blue",
+            "Red",
+            "Purple"
+          ],
+          "initialFleet": [
+            "0pbpb0",
+            "0bpbp0"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Red",
+            "Purple"
+          ],
+          "initialFleet": [
+            "0prpr0",
+            "0rprp0"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Red",
+            "Purple"
+          ],
+          "initialFleet": [
+            "rrpprr",
+            "pbbbbp"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Red",
+            "Purple"
+          ],
+          "initialFleet": [
+            "prbbrp",
+            "prpprp",
+            "rpbbpr"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Red",
+            "Purple"
+          ],
+          "initialFleet": [
+            "rrpprr",
+            "rrpprr",
+            "pbbbbp"
+          ],
+          "lineSpawns": []
+        }
       ]
     },
     "3": {
-      "enemiesToDefeat": 60,
-      "numberOfColors": 2,
-      "possibleColors": [
-        "Blue",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "11221/22112",
-        "21122/12211",
-        "12112/21221",
-        "11221/22112",
-        "21122/12211",
-        "12112/21221"
-      ],
-      "lineSpawns": [
-        "11221",
-        "22112",
-        "21122",
-        "12211",
-        "12112",
-        "21221"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "bbyybb",
+            "yybbyy"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "rryyrr",
+            "yyrryy"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "rybyry",
+            "rybyry"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "bbyyrr",
+            "rryybb"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "ryyyyb",
+            "rbbbbr",
+            "yyrryy"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Yellow",
+            "Red"
+          ],
+          "initialFleet": [
+            "yyyrrr",
+            "bbbyyy",
+            "rrrbbb"
+          ],
+          "lineSpawns": []
+        }
       ]
     },
     "4": {
-      "enemiesToDefeat": 80,
-      "numberOfColors": 4,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "11223/34411/22334/41122/33441",
-        "22334/41122/33441/12233/11223",
-        "11223/34411/22334/41122/33441",
-        "22334/41122/33441/12233/11223"
-      ],
-      "lineSpawns": [
-        "11223",
-        "34411",
-        "22334",
-        "41122",
-        "33441",
-        "12233"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Green"
+          ],
+          "initialFleet": [
+            "g0g0g"
+          ],
+          "lineSpawns": [
+            "g0g0g"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Blue",
+            "Green"
+          ],
+          "initialFleet": [
+            "0gbgb0",
+            "0bgbg0"
+          ],
+          "lineSpawns": [
+            "0gbgb0",
+            "0bgbg0"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Green"
+          ],
+          "initialFleet": [
+            "0grgr0",
+            "0rgrg0"
+          ],
+          "lineSpawns": [
+            "0grgr0",
+            "0rgrg0"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green"
+          ],
+          "initialFleet": [
+            "rgrgr",
+            "gbgbg"
+          ],
+          "lineSpawns": [
+            "rrrrr",
+            "bbbbb"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "*g***",
+            "***g*"
+          ],
+          "lineSpawns": [
+            "***g*",
+            "*g***",
+            "****g"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green"
+          ],
+          "initialFleet": [
+            "brggrb",
+            "brggrb",
+            "rrbbrr"
+          ],
+          "lineSpawns": [
+            "rbbbbr",
+            "rrggrr",
+            "bbggbb"
+          ]
+        }
       ]
     },
     "5": {
-      "enemiesToDefeat": 100,
-      "numberOfColors": 4,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "11223/34411/22334/41122/33441",
-        "22334/41122/33441/12233/11223",
-        "11223/34411/22334/41122/33441",
-        "22334/41122/33441/12233/11223"
-      ],
-      "lineSpawns": [
-        "11223",
-        "34411",
-        "22334",
-        "41122",
-        "33441",
-        "12233"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple"
+          ],
+          "initialFleet": [
+            "11223",
+            "34411",
+            "22334",
+            "41122",
+            "33441"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple"
+          ],
+          "initialFleet": [
+            "22334",
+            "41122",
+            "33441",
+            "12233",
+            "11223"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple"
+          ],
+          "initialFleet": [
+            "11223",
+            "34411",
+            "22334",
+            "41122",
+            "33441"
+          ],
+          "lineSpawns": []
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple"
+          ],
+          "initialFleet": [
+            "22334",
+            "41122",
+            "33441",
+            "12233",
+            "11223"
+          ],
+          "lineSpawns": []
+        }
       ]
     },
     "6": {
-      "enemiesToDefeat": 120,
-      "numberOfColors": 5,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Purple",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "11223/34455/22334/45511/33445",
-        "22334/45511/33445/51122/11223",
-        "11223/34455/22334/45511/33445",
-        "22334/45511/33445/51122/11223",
-        "11223/34455/22334/45511/33445"
-      ],
-      "lineSpawns": [
-        "11223",
-        "34455",
-        "22334",
-        "45511",
-        "33445",
-        "51122"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "11223",
+            "34455"
+          ],
+          "lineSpawns": [
+            "11223",
+            "34455",
+            "22334",
+            "45511",
+            "33445",
+            "51122"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "22334",
+            "45511"
+          ],
+          "lineSpawns": [
+            "11223",
+            "34455",
+            "22334",
+            "45511",
+            "33445",
+            "51122"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "11223",
+            "34455"
+          ],
+          "lineSpawns": [
+            "11223",
+            "34455",
+            "22334",
+            "45511",
+            "33445",
+            "51122"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "22334",
+            "45511"
+          ],
+          "lineSpawns": [
+            "11223",
+            "34455",
+            "22334",
+            "45511",
+            "33445",
+            "51122"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "11223",
+            "34455"
+          ],
+          "lineSpawns": [
+            "11223",
+            "34455",
+            "22334",
+            "45511",
+            "33445",
+            "51122"
+          ]
+        }
       ]
     },
     "7": {
-      "enemiesToDefeat": 140,
-      "numberOfColors": 5,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Purple",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "112233/344555/223344/455111/334455/511222",
-        "223344/455111/334455/511222/112233/344555",
-        "112233/344555/223344/455111/334455/511222",
-        "223344/455111/334455/511222/112233/344555"
-      ],
-      "lineSpawns": [
-        "112233",
-        "344555",
-        "223344",
-        "455111",
-        "334455",
-        "511222"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "112233",
+            "344555",
+            "223344",
+            "455111"
+
+          ],
+          "lineSpawns": [
+            "112233",
+            "344555",
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ],
+          "lineSpawns": [
+            "112233",
+            "344555",
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "112233",
+            "344555",
+            "223344",
+            "455111"
+          ],
+          "lineSpawns": [
+            "112233",
+            "344555",
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ]
+        }
+        
       ]
     },
     "8": {
-      "enemiesToDefeat": 160,
-      "numberOfColors": 5,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Purple",
-        "Yellow"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "112233/344555/223344/455111/334455/511222",
-        "223344/455111/334455/511222/112233/344555",
-        "112233/344555/223344/455111/334455/511222",
-        "223344/455111/334455/511222/112233/344555",
-        "112233/344555/223344/455111/334455/511222"
-      ],
-      "lineSpawns": [
-        "112233",
-        "344555",
-        "223344",
-        "455111",
-        "334455",
-        "511222"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "112233",
+            "344555",
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ],
+          "lineSpawns": [
+            "112233",
+            "344555",
+            "223344",
+            "455111",
+            "334455",
+            "511222"
+          ]
+        }
       ]
     },
     "9": {
-      "enemiesToDefeat": 180,
-      "numberOfColors": 6,
-      "possibleColors": [
-        "Red",
-        "Blue",
-        "Green",
-        "Purple",
-        "Yellow",
-        "Orange"
-      ],
-      "requiredColors": [],
       "backgroundImage": "",
       "possibleSoundtrackTracks": [],
-      "fleetSpawns": [
-        "o11223/334455/221133/445522/113344/552211",
-        "221133/445522/113344/552211/o11223/334455",
-        "o11223/334455/221133/445522/113344/552211",
-        "221133/445522/113344/552211/o11223/334455",
-        "o11223/334455/221133/445522/113344/552211"
-      ],
-      "lineSpawns": [
-        "334455",
-        "221133",
-        "445522",
-        "113344",
-        "552211"
+      "fleets": [
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow",
+            "Orange"
+          ],
+          "initialFleet": [
+            "o11223",
+            "334455",
+            "221133",
+            "445522",
+            "113344",
+            "552211"
+          ],
+          "lineSpawns": [
+            "334455",
+            "221133",
+            "445522",
+            "113344",
+            "552211"
+          ]
+        }   
       ]
     }
   }

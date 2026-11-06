@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace CandyCruisers
@@ -57,8 +58,8 @@ namespace CandyCruisers
         public System.Collections.Generic.List<EnemyColor> UnlockedColors()
         {
             if (UsesLevelDefinition)
-                return Fleet.SpawnPalette != null ? new System.Collections.Generic.List<EnemyColor>(Fleet.SpawnPalette) :
-                    LevelDefinition.UniqueColors(Definition.possibleColors);
+                return new System.Collections.Generic.List<EnemyColor>(Fleet.SpawnPalette ??
+                    Fleet.PendingPlan?.SpawnPalette ?? System.Array.Empty<EnemyColor>());
             var eligible = new System.Collections.Generic.List<EnemyColor>();
             foreach (EnemyColor color in System.Enum.GetValues(typeof(EnemyColor)))
             {
@@ -74,7 +75,7 @@ namespace CandyCruisers
         private System.Collections.Generic.List<EnemyColor> SpawnColors(bool newCycle = false)
         {
             if (grid == null) grid = GetComponent<EnemyGrid>();
-            var colors = UsesLevelDefinition && newCycle ? LevelDefinition.UniqueColors(Definition.possibleColors) : UnlockedColors();
+            var colors = UnlockedColors();
             colors.RemoveAll(color => (!newCycle && grid.IsColorCleared(color)) || Prefab(color) == null ||
                 Prefab(color).GetComponentInChildren<SpriteRenderer>() == null);
             return colors;
@@ -104,8 +105,12 @@ namespace CandyCruisers
             bool orange = colors.Remove(EnemyColor.Orange) && Random.Range(0, OrangeSpawnOdds) == 0;
             if (!orange && colors.Count == 0) return null;
             var summoned = Spawn(orange ? EnemyColor.Orange : colors[Random.Range(0, colors.Count)], cell.x, cell.y,
-                source.Color == EnemyColor.Purple && source.IsSpecial ? EnemyColor.Purple : (EnemyColor?)null, true);
-            if (summoned != null) GetComponent<SoundEffects>()?.PlayCue(SoundEffect.PurpleWarp);
+                EnemyColor.Purple, true);
+            if (summoned != null)
+            {
+                source.GetComponent<EnemyPresentation>()?.SummonFlash();
+                GetComponent<SoundEffects>()?.PlayCue(SoundEffect.PurpleWarp);
+            }
             session?.CheckPlayerContact();
             return summoned;
         }
@@ -197,12 +202,12 @@ namespace CandyCruisers
             var definition = Definition;
             var errors = definition.ValidationErrors();
             if (errors.Count > 0) { Debug.LogError(string.Join(" ", errors), this); return null; }
-            var plan = SpawnScript.Plan(definition, definition.fleetSpawns[nextFleet]);
+            var plan = SpawnScript.Plan(definition.fleets[nextFleet]);
             if (plan == null) { Debug.LogError("Cannot resolve the scripted fleet for level " + Level, this); return null; }
             foreach (var color in plan.SpawnPalette)
                 if (Prefab(color) == null || Prefab(color).GetComponentInChildren<SpriteRenderer>() == null)
                 { Debug.LogError("Missing enemy prefab for scripted color " + color, this); return null; }
-            nextFleet = (nextFleet + 1) % definition.fleetSpawns.Length;
+            nextFleet = (nextFleet + 1) % definition.fleets.Length;
             return plan;
         }
 
@@ -210,7 +215,10 @@ namespace CandyCruisers
         {
             var round = Fleet.ActivePlan;
             if (round.LineSpawns.Count == 0) return;
-            var cells = SpawnScript.Decode(round.LineSpawns[nextLine % round.LineSpawns.Count], round.Bindings);
+            var wildcardColors = new System.Collections.Generic.List<EnemyColor>(round.SpawnPalette);
+            wildcardColors.RemoveAll(color => Fleet.IsCleared(color) ||
+                color == EnemyColor.Orange && Fleet.ColorCount(color) > 0);
+            var cells = SpawnScript.Decode(round.LineSpawns[nextLine % round.LineSpawns.Count], round.Bindings, wildcardColors);
             nextLine = (nextLine + 1) % round.LineSpawns.Count;
             for (int column = 0; column < cells.Length; column++)
                 if (cells[column].HasValue && !Fleet.IsCleared(cells[column].Value) && CanSpawn(cells[column].Value, column, 0))
@@ -353,6 +361,7 @@ namespace CandyCruisers
             int rowWidth = plan.Columns;
             if (plan.IsScripted)
             {
+                nextLine = 0;
                 for (int i = 0; i < cells.Length; i++)
                     if (cells[i].HasValue) Spawn(cells[i].Value, i % rowWidth, i / rowWidth);
             }
@@ -392,7 +401,8 @@ namespace CandyCruisers
         }
 
         private bool CanSpawn(EnemyColor color, int column, int row) =>
-            color != EnemyColor.Orange || grid.Fleet.ColorCount(EnemyColor.Orange) == 0 && !grid.Model.HasOrangeNeighbor(column, row);
+            (Fleet.SpawnPalette == null || Fleet.SpawnPalette.Contains(color)) &&
+            (color != EnemyColor.Orange || grid.Fleet.ColorCount(EnemyColor.Orange) == 0 && !grid.Model.HasOrangeNeighbor(column, row));
 
         private void SpawnPlannedRow(EnemyColor[] plan, int row)
         {

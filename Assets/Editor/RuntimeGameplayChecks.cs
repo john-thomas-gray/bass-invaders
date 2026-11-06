@@ -40,7 +40,11 @@ namespace CandyCruisers.Editor
                 // Restart reloads the authored catalog too. Preserve this mechanics fixture's
                 // baseline before Start reserves its opening fleet, just as on initial entry.
                 foreach (var root in scene.GetRootGameObjects())
-                    foreach (var session in root.GetComponentsInChildren<GameSession>(true)) session.LevelCatalog = null;
+                    foreach (var session in root.GetComponentsInChildren<GameSession>(true))
+                    {
+                        session.LevelCatalog = null;
+                        session.gameObject.AddComponent<RuntimeOpeningObserver>();
+                    }
             };
         }
 
@@ -110,6 +114,7 @@ namespace CandyCruisers.Editor
                         {
                             Require(!music.Source.isPlaying, "Main menu stays silent when no local music is installed");
                             grid.GetComponent<GameSession>().StartRun();
+                            ObserveOpening(grid.GetComponent<GameSession>());
                             return;
                         }
                         // The opening warning releases music before asynchronous audio loading finishes.
@@ -119,6 +124,7 @@ namespace CandyCruisers.Editor
                         int menuPosition = music.Source.timeSamples;
                         float menuBeat = music.BeatPosition;
                         grid.GetComponent<GameSession>().StartRun();
+                        ObserveOpening(grid.GetComponent<GameSession>());
                         bool repeatsMenuSong = new SerializedObject(music).FindProperty("track").objectReferenceValue == menuClip;
                         Require(music.Source.clip == menuClip && music.Source.isPlaying && music.Source.loop == repeatsMenuSong &&
                             music.Source.timeSamples >= menuPosition && music.Source.timeSamples - menuPosition < menuClip.frequency / 10 &&
@@ -136,7 +142,7 @@ namespace CandyCruisers.Editor
                         observedEmptyOpening = true;
                         return;
                     }
-                    Require(observedEmptyOpening, "Empty opening is visible before first spawn");
+                    Require(observedEmptyOpening, "Opening reserves an empty fleet before first spawn");
                     foreach (var visual in grid.GetComponentsInChildren<EnemyPresentation>())
                         Require(visual.IsPhasing, "Opening enemies arrive through rifts");
                     if (SessionState.GetBool("CandyCruisers.AbilityPreview", false))
@@ -588,6 +594,13 @@ namespace CandyCruisers.Editor
                     EditorApplication.Exit(0);
         }
 
+        internal static void ObserveOpening(GameSession session)
+        {
+            if (session.State != GameSession.RunState.Refilling || session.GetComponent<EnemyGrid>().Model.Count != 0) return;
+            if (phase == 0) observedEmptyOpening = true;
+            if (phase == 12) observedEmptyRestart = true;
+        }
+
         private static void PreparePreview()
         {
             var movement = grid.GetComponent<EnemyGridMovement>();
@@ -646,5 +659,13 @@ namespace CandyCruisers.Editor
 
         private static void Require(bool condition, string message)
         { if (!condition) throw new Exception("Runtime gameplay check failed: " + message); }
+    }
+
+    // Inspect the restarted scene after GameSession.Start and before its first Update.
+    // Editor polling can miss an entire short, beat-aligned opening on a slow frame.
+    [DefaultExecutionOrder(1000)]
+    internal sealed class RuntimeOpeningObserver : MonoBehaviour
+    {
+        private void Start() => RuntimeGameplayChecks.ObserveOpening(GetComponent<GameSession>());
     }
 }

@@ -14,16 +14,22 @@ namespace CandyCruisers
         public int ComboMultiplier => Math.Max(1, ComboStreak + 1);
         public int ActiveComboMultiplier { get; private set; } = 1;
         public LevelCatalog LevelCatalog { get; set; }
+        public bool UsesScriptedProgression => LevelCatalog?.ForLevel(Level) != null;
+        public int ClearedFleets { get; private set; }
+        public int FleetsToClear => Math.Max(1, LevelCatalog?.ForLevel(Level)?.fleets?.Length ?? 1);
         private bool shotActive;
         private readonly HashSet<EnemyColor> shotColors = new HashSet<EnemyColor>();
         public int ScoringComboMultiplier => shotActive ? ActiveComboMultiplier : 1;
-        public int NextThreshold => NextThresholdForLevel(Level, LevelCatalog);
-        public int PreviousThreshold => PreviousThresholdForLevel(Level, LevelCatalog);
-        public int EarnedLevel => LevelForDefeated(Defeated, LevelCatalog);
+        // Defeat thresholds remain for procedural development fixtures without a level map.
+        public int NextThreshold => NextThresholdForLevel(Level);
+        public int PreviousThreshold => PreviousThresholdForLevel(Level);
+        public int EarnedLevel => UsesScriptedProgression ?
+            (ClearedFleets >= FleetsToClear && Level < int.MaxValue ? Level + 1 : Level) : LevelForDefeated(Defeated);
         public bool LevelUpPending => EarnedLevel > Level;
-        public int EarnedPreviousThreshold => PreviousThresholdForLevel(EarnedLevel, LevelCatalog);
-        public int EarnedNextThreshold => NextThresholdForLevel(EarnedLevel, LevelCatalog);
-        public float ActiveLevelProgressFraction => FractionBetween(Defeated, PreviousThreshold, NextThreshold);
+        public int EarnedPreviousThreshold => PreviousThresholdForLevel(EarnedLevel);
+        public int EarnedNextThreshold => NextThresholdForLevel(EarnedLevel);
+        public float ActiveLevelProgressFraction => UsesScriptedProgression ?
+            ClearedFleets / (float)FleetsToClear : FractionBetween(Defeated, PreviousThreshold, NextThreshold);
         public float BankedLevelProgressFraction => LevelUpPending ?
             FractionBetween(Defeated, EarnedPreviousThreshold, EarnedNextThreshold) : 0;
         public const int StandardRowWidth = 5;
@@ -33,42 +39,18 @@ namespace CandyCruisers
         public int BatchRows => Level <= 2 ? 2 : Level == 3 ? 3 : Level < 4 ? 4 : Level < 7 ? 5 : 6;
         public int BatchEnemies => BatchRows * RowWidth;
         public static int RowWidthForLevel(int level) => level >= WideRowsStartLevel ? WideRowWidth : StandardRowWidth;
-        public static int EnemiesToDefeatForLevel(int level, LevelCatalog catalog = null) =>
-            Math.Max(1, catalog != null && catalog.ForLevel(level) != null ? catalog.ForLevel(level).enemiesToDefeat :
-                (int)Math.Min(int.MaxValue, 20L * Math.Max(MinLevel, level)));
+        public static int PreviousThresholdForLevel(int level) =>
+            level <= MinLevel ? 0 : NextThresholdForLevel(level - 1);
 
-        public static int PreviousThresholdForLevel(int level, LevelCatalog catalog = null) =>
-            level <= MinLevel ? 0 : NextThresholdForLevel(level - 1, catalog);
-
-        public static int NextThresholdForLevel(int level, LevelCatalog catalog = null)
+        public static int NextThresholdForLevel(int level)
         {
             level = Math.Max(MinLevel, level);
-            int defined = catalog != null && catalog.levels != null ? Math.Min(level, catalog.levels.Length) : 0;
-            if (defined == 0)
-            {
-                long factor = 10L * level;
-                return factor > int.MaxValue / (level + 1L) ? int.MaxValue : (int)(factor * (level + 1L));
-            }
-            long threshold = 0;
-            for (int number = MinLevel; number <= defined; number++) threshold += EnemiesToDefeatForLevel(number, catalog);
-            threshold += (long)(level - defined) * EnemiesToDefeatForLevel(level, catalog);
-            return (int)Math.Min(int.MaxValue, threshold);
+            long factor = 10L * level;
+            return factor > int.MaxValue / (level + 1L) ? int.MaxValue : (int)(factor * (level + 1L));
         }
 
-        public static int LevelForDefeated(int defeated, LevelCatalog catalog = null)
+        public static int LevelForDefeated(int defeated)
         {
-            int defined = catalog != null && catalog.levels != null ? catalog.levels.Length : 0;
-            if (defined > 0)
-            {
-                long remaining = Math.Max(0, defeated);
-                for (int number = MinLevel; number <= defined; number++)
-                {
-                    int required = EnemiesToDefeatForLevel(number, catalog);
-                    if (remaining < required) return number;
-                    remaining -= required;
-                }
-                return (int)Math.Min(int.MaxValue, defined + 1L + remaining / EnemiesToDefeatForLevel(defined, catalog));
-            }
             int level = MinLevel;
             while (defeated >= 10L * level * (level + 1L)) level++;
             return level;
@@ -81,7 +63,8 @@ namespace CandyCruisers
         public void Reset(int level = MinLevel)
         {
             Level = Math.Max(MinLevel, level);
-            Defeated = PreviousThreshold;
+            Defeated = UsesScriptedProgression ? 0 : PreviousThreshold;
+            ClearedFleets = 0;
             Score = 0;
             ResetCombo();
         }
@@ -93,7 +76,11 @@ namespace CandyCruisers
             if (fleetCleared) earned += 10000L * Level;
             Score += earned;
             Defeated = (int)Math.Min(int.MaxValue, (long)Defeated + count);
-            if (fleetCleared) AdvanceLevelIfEarned();
+            if (fleetCleared)
+            {
+                if (UsesScriptedProgression) ClearedFleets++;
+                AdvanceLevelIfEarned();
+            }
             return earned;
         }
 
@@ -102,6 +89,7 @@ namespace CandyCruisers
             int earned = EarnedLevel;
             if (earned <= Level) return false;
             Level = earned;
+            ClearedFleets = 0;
             return true;
         }
 
