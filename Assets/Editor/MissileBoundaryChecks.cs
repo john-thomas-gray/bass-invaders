@@ -20,6 +20,7 @@ namespace CandyCruisers.Editor
             var root = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Red Missile.prefab"));
             root.transform.position = position;
             var missile = root.GetComponent<EnemyMissile>();
+            SpecialEnemyChecks.StartAtCruiseSpeed(missile);
             if (heading.HasValue) missile.LaunchAimed(player, heading.Value);
             else missile.SetTarget(player);
             var flight = root.GetComponent<MissileFlightSound>();

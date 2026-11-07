@@ -41,6 +41,12 @@ namespace CandyCruisers
             rememberedStartLevel = RunProgress.MinLevel;
         }
         private float previousTimeScale = 1;
+        private float appliedTempoMultiplier = 1;
+        private float deathTempoMultiplier = 1;
+        public float TempoMultiplier => isActiveAndEnabled && !PresentationPreview && !OpeningWarningActive &&
+            (State == RunState.Playing || State == RunState.Refilling) ?
+            1 + CombatBalance.SpecialGreenTempoIncrease * ((grid != null ? grid : GetComponent<EnemyGrid>())?.SpecialGreenCount ?? 0) : 1;
+        public float MusicTempoMultiplier => State == RunState.Dying ? deathTempoMultiplier : TempoMultiplier;
         private int inputBlockedThrough = -1;
         private bool started;
         public bool IsPaused { get; private set; }
@@ -500,9 +506,25 @@ namespace CandyCruisers
             BeginBatch(spawner.PlanNextFleet(),
                 musicPlayer != null ? musicPlayer.SecondsForBeats(1) : CurrentBeatDuration);
         }
+        private void RefreshGameplayTempo()
+        {
+            // Edit-mode previews and checks must not rewrite the project's time settings.
+            if (Application.isPlaying) ApplyGameplayTempo(TempoMultiplier);
+        }
+
+        private void ApplyGameplayTempo(float multiplier)
+        {
+            if (Mathf.Approximately(appliedTempoMultiplier, multiplier)) return;
+            float change = multiplier / appliedTempoMultiplier;
+            if (IsPaused) previousTimeScale *= change;
+            else Time.timeScale *= change;
+            appliedTempoMultiplier = multiplier;
+        }
+
         public void Pause()
         {
             if (IsPaused || State == RunState.MainMenu || State == RunState.GameOver || State == RunState.Dying) return;
+            RefreshGameplayTempo();
             IsPaused = true;
             previousTimeScale = Time.timeScale;
             Time.timeScale = 0;
@@ -516,6 +538,7 @@ namespace CandyCruisers
             MetronomeMenuOpen = false;
             SongSelection.Close();
             if (!IsPaused) return;
+            RefreshGameplayTempo();
             IsPaused = false;
             Time.timeScale = previousTimeScale;
             if (soundEffects != null) soundEffects.SetPaused(false);
@@ -578,6 +601,7 @@ namespace CandyCruisers
             ClearCelebration.BarStarted -= OnCelebrationBarStarted;
             ClearCelebration.BarSpiked -= OnCelebrationBarSpiked;
             if (player != null) player.SetCelebrationColor(null);
+            ApplyGameplayTempo(1);
             if (IsPaused) { Time.timeScale = previousTimeScale; IsPaused = false; }
             if (soundEffects != null) soundEffects.SetPaused(false);
             if (grid != null) grid.FleetCleared -= BeginRefill;
@@ -631,9 +655,12 @@ namespace CandyCruisers
             shotScore = 0;
         }
 
+        private bool ShotPreservesCombo => player != null && player.Tongue != null &&
+            player.Tongue.HitRegularShield && !player.Tongue.LastCompletionCancelled;
+
         private void OnShotRetractionStarted(bool hit)
         {
-            if (hit) return;
+            if (hit || ShotPreservesCombo) return;
             Progress.ResetCombo();
             ObserveComboStreak();
         }
@@ -641,7 +668,7 @@ namespace CandyCruisers
         private void OnShotCompleted(bool hit)
         {
             accumulatingShotScore = false;
-            Progress.FinishShot(hit);
+            Progress.FinishShot(hit || ShotPreservesCombo);
             ObserveComboStreak();
         }
 
@@ -880,6 +907,7 @@ namespace CandyCruisers
 
         public void Tick(float seconds)
         {
+            RefreshGameplayTempo();
             if (IsPaused || SongSelection.IsOpen) return;
             if (OpeningWarningActive)
             {
@@ -1234,9 +1262,13 @@ namespace CandyCruisers
             if (DeveloperOptions.PlayerInvincible) return;
             if (State != RunState.Playing && State != RunState.Refilling) return;
             FadeComboOnDeath();
+            deathTempoMultiplier = TempoMultiplier;
             GameOverBlackoutSeconds = musicPlayer != null ? musicPlayer.SecondsForBeats(GameOverBlackoutBeats) :
                 GameOverBlackoutBeats * CurrentBeatDuration;
+            // Death runs on unscaled time; retain the accelerated song's real beat length.
+            GameOverBlackoutSeconds /= deathTempoMultiplier;
             State = RunState.Dying;
+            RefreshGameplayTempo();
             deathElapsed = 0;
             deathAnimationStarted = false;
             musicPlayer?.UpdatePlayback();

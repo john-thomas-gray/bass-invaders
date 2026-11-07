@@ -62,7 +62,7 @@ namespace CandyCruisers.Editor
                 Check(!missile.Suspended, "Resume during refill releases surviving missiles");
                 // A surviving bullet must remain dangerous even with no enemies left.
                 missile.transform.position = player.transform.position - missile.transform.rotation * Vector3.down;
-                missile.Tick(.5f);
+                missile.Tick(1f);
                 Check(missile.Finished && !player.Alive && player.Lives == PlayerMovement.MaxLives - 1,
                     "Surviving missile can hit the player during refill");
             });

@@ -74,6 +74,11 @@ namespace CandyCruisers.Editor
                     missile.Tick(2f);
                     Check(Vector3.Dot(missile.transform.position - origin, direction) > 0,
                         "Shot reverses direction and moves forward after accelerating");
+                    // Earlier layout checks can leave a taller camera view. Allow
+                    // the accelerating shot enough travel to fill that view's trail.
+                    for (int i = 0; i < 60 && !missile.Finished &&
+                        Vector3.Distance(smoke.GetPosition(0), smoke.GetPosition(smoke.positionCount - 1)) < screenThird - .02f; i++)
+                        missile.Tick(.05f);
                     smokeTail = smoke.GetPosition(0); smokeHead = smoke.GetPosition(smoke.positionCount - 1);
                     Check(Mathf.Abs(Vector3.Distance(smokeTail, smokeHead) - screenThird) < .02f,
                         "Aimed shot smoke trail caps at about one third of the screen");

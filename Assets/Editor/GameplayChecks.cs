@@ -63,6 +63,7 @@ namespace CandyCruisers.Editor
             PlayfieldFrameChecks.Run();
             YellowTransformationChecks.Run();
             SpecialEnemyChecks.Run();
+            SpecialGreenTempoChecks.Run();
             PurpleYellowSpecialChecks.Run();
             PresentationChecks.Run();
             MenuChecks.Run();

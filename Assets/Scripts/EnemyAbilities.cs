@@ -123,11 +123,13 @@ namespace CandyCruisers
             RefreshVisuals();
         }
 
-        private void ScheduleCooldown()
+        private void ScheduleCooldown(bool noEffect = false)
         {
             var range = CombatBalance.CooldownBeats(currentColor, grid.GetComponent<GameSession>()?.Progress.Level ?? 1,
                 enemy.IsSpecial);
-            cooldownBeat = beatClock.AfterBeats(Random.Range(range.x, range.y + 1));
+            float beats = Random.Range(Mathf.RoundToInt(range.x), Mathf.RoundToInt(range.y) + 1);
+            if (noEffect) beats *= .5f;
+            cooldownBeat = noEffect ? beatClock.Position + beats : beatClock.AfterBeats(Mathf.RoundToInt(beats));
         }
 
         private void AdvanceBeatClock(float seconds)
@@ -202,7 +204,7 @@ namespace CandyCruisers
                 {
                     castRemaining = 0;
                     startSummonFlash = CompleteCast();
-                    ScheduleCooldown();
+                    ScheduleCooldown(enemy.Color == EnemyColor.Purple && !startSummonFlash);
                     startGreenSpin = enemy.Color == EnemyColor.Green && enemy.IsSpecial;
                 }
             }
@@ -246,8 +248,17 @@ namespace CandyCruisers
                         BeginImitation(targets[Random.Range(0, targets.Count)]);
                         return;
                     }
+                    ScheduleCooldown(true);
                 }
-                else if (enemy.Color == EnemyColor.Purple) startSummonFlash = CompleteCast();
+                else if (enemy.Color == EnemyColor.Purple)
+                {
+                    if (grid.GetComponent<EnemyRowSpawner>()?.CanSummon(enemy) == true)
+                    {
+                        castRemaining = 1;
+                        castBeat = beatClock.AfterBeats(1);
+                    }
+                    else ScheduleCooldown(true);
+                }
                 else { castRemaining = 1; castBeat = beatClock.AfterBeats(1); }
             }
             RefreshVisuals();

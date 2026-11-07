@@ -808,7 +808,7 @@ reference for individual rules and original limitations.
 - [x] A magic shot consumes all stored magic; only clearing the last enemy of a color earns another, never a partial chain or miss.
 
 ## Fleet Movement Update
-- [x] Make each Green tick pulse a bright electrical surge with a jagged corona, branching bolts and pale cores.
+- [x] Make each Green tick pulse a large rhythm-game arrow with green fill, a white rim and a dark outline; follow the fleet's direction and reversals, then fade inside the playfield edges.
 - [x] Move the fleet on song-beat ticks whose distance matches the existing average Green-count and level-adjusted speed.
 - [x] Pulse one Green per tick in repeating sequence, skipping dead or recolored enemies and including new Greens.
 - [x] Preserve boundary contact, pause, wave reset, and special-Green dash behavior.

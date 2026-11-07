@@ -82,26 +82,79 @@ namespace CandyCruisers.Editor
                 var visual = green.GetComponent<EnemyPresentation>();
                 visual.Tick(1, EnemyColor.Green, 0);
                 Color resting = green.Visuals.Body.color;
+                var hitBounds = green.HitBounds;
+                var random = UnityEngine.Random.state;
                 visual.MovementPulse();
                 Check(green.Visuals.Body.color != resting, "Selected Green visibly flashes");
-                var bolts = green.GetComponentsInChildren<LineRenderer>().Where(line => line.name.StartsWith("Green surge")).ToArray();
-                Check(bolts.Length == 10 && bolts.All(line => line.enabled && !line.useWorldSpace),
-                    "Green sparks have a corona and four electrical branches that follow the enemy");
-                Check(!green.GetComponentsInChildren<LineRenderer>().Any(line => line.name.Contains("arrow")),
-                    "Green electricity contains no arrows");
-                Vector3 point = bolts[0].GetPosition(1);
+                var arrow = green.Visuals.Root.Find("Green movement arrow");
+                var layers = arrow.GetComponentsInChildren<MeshRenderer>();
+                Check(layers.Length == 3 && layers.All(layer => layer.enabled &&
+                    layer.GetComponent<MeshFilter>().sharedMesh == layers[0].GetComponent<MeshFilter>().sharedMesh),
+                    "A large filled rhythm arrow uses shared geometry for its outline, white rim and green fill");
+                Check(layers[0].bounds.size.x > green.Visuals.Body.bounds.size.x * 1.5f &&
+                    arrow.TransformDirection(Vector3.right).x > .99f,
+                    "The arrow is larger than the Green and initially points right");
+                Check(!green.GetComponentsInChildren<LineRenderer>().Any(line => line.name.StartsWith("Green surge")),
+                    "The movement arrow replaces every electrical branch");
+                Vector3 point = arrow.position, scale = arrow.lossyScale;
                 visual.Tick(.06f, EnemyColor.Green, 0);
-                Check(bolts[0].GetPosition(1) != point, "Electricity changes shape during the pulse");
+                Check(arrow.position.x > point.x && arrow.lossyScale.x > scale.x,
+                    "The arrow pops larger and slides in the travel direction");
+                point = arrow.position; scale = arrow.lossyScale;
+                visual.Tick(0, EnemyColor.Green, 0);
+                Check(arrow.position == point && arrow.lossyScale == scale, "Pause holds the arrow pose");
                 visual.MovementPulse(-1);
-                Check(bolts.All(line => line.enabled), "Leftward movement uses the same electrical sparks");
+                Check(layers.All(layer => layer.enabled) && arrow.TransformDirection(Vector3.right).x < -.99f,
+                    "Leftward movement flips the entire arrow silhouette");
+                visual.Tick(EnemyPresentation.MovementPulseSeconds - .05f, EnemyColor.Green, 0);
+                var tint = new MaterialPropertyBlock();
+                layers[2].GetPropertyBlock(tint);
+                Check(tint.GetColor("_Color").a > 0 && tint.GetColor("_Color").a < .5f, "The arrow fades at the end of the pulse");
                 visual.Tick(EnemyPresentation.MovementPulseSeconds, EnemyColor.Green, 0);
-                Check(bolts.All(line => !line.enabled), "Electrical arcs disappear after the pulse");
+                Check(layers.All(layer => !layer.enabled), "The arrow disappears after the pulse");
                 Check(green.Visuals.Body.color == resting, "Pulse returns to original color without changing geometry");
                 visual.MovementPulse();
                 visual.Clear();
-                Check(bolts.All(line => !line.enabled), "Disabling or recoloring cannot leave electricity behind");
+                Check(layers.All(layer => !layer.enabled), "Clearing presentation cannot leave the arrow behind");
+                visual.MovementPulse();
+                visual.Tick(0, EnemyColor.Blue, 0);
+                Check(layers.All(layer => !layer.enabled), "Recoloring hides the movement arrow");
+
+                Vector3 referencePosition = default, referenceScale = default;
+                foreach (int rate in new[] { 30, 60, 120 })
+                {
+                    visual.MovementPulse();
+                    float elapsed = 0;
+                    while (elapsed < .15f - .000001f)
+                    {
+                        float step = Mathf.Min(1f / rate, .15f - elapsed);
+                        visual.Tick(step, EnemyColor.Green, 0);
+                        elapsed += step;
+                    }
+                    if (rate == 30) { referencePosition = arrow.position; referenceScale = arrow.lossyScale; }
+                    else Check(Vector3.Distance(referencePosition, arrow.position) < .0001f &&
+                        Vector3.Distance(referenceScale, arrow.lossyScale) < .0001f,
+                        "Arrow motion agrees at 30, 60 and 120 frames per second");
+                }
+                grid.GetComponent<EnemyRowSpawner>().enabled = false;
+                var movement = grid.GetComponent<EnemyGridMovement>();
+                visual.MovementPulse();
+                grid.OccupiedHorizontalBounds(out _, out float right);
+                movement.AdvanceDistance(PlayerMovement.HalfWidth - right);
+                visual.Tick(0, EnemyColor.Green, 0);
+                Check(movement.Direction == -1 && arrow.TransformDirection(Vector3.right).x < -.99f &&
+                    layers[0].bounds.max.x < PlayerMovement.HalfWidth,
+                    "A right-edge reversal turns the active arrow left and keeps its outline inside the field");
+                grid.OccupiedHorizontalBounds(out float left, out _);
+                movement.AdvanceDistance(left + PlayerMovement.HalfWidth);
+                visual.Tick(0, EnemyColor.Green, 0);
+                Check(movement.Direction == 1 && arrow.TransformDirection(Vector3.right).x > .99f &&
+                    layers[0].bounds.min.x > -PlayerMovement.HalfWidth,
+                    "A left-edge reversal turns the active arrow right without clipping");
+                Check(green.HitBounds.size == hitBounds.size && UnityEngine.Random.state.Equals(random),
+                    "Arrow animation changes neither collision size nor gameplay randomness");
             });
-            Debug.Log("Fleet tick checks passed: counts two and four, half-speed travel, frame timing, Green rotation, removals, pause, reset and electrical sparks.");
+            Debug.Log("Fleet tick checks passed: counts two and four, half-speed travel, Green rotation, removals, pause, directional rhythm arrows, reversals, fade, frame timing and edge framing.");
         }
         public static void CapturePreview()
         {
@@ -110,9 +163,16 @@ namespace CandyCruisers.Editor
             for (int col = 0; col < 5; col++)
                 ProgressionChecks.Add(grid, col == 2 ? EnemyColor.Green : EnemyColor.Blue, col, 2);
             var green = grid.GetComponentsInChildren<GridEnemy>().First(enemy => enemy.Color == EnemyColor.Green);
-            green.GetComponent<EnemyPresentation>().MovementPulse();
-            GameplayChecks.Capture(540, 960, "green-electric-surge");
-            GameplayChecks.Capture(960, 540, "green-electric-surge-landscape");
+            foreach (int direction in new[] { 1, -1 })
+            {
+                var visual = green.GetComponent<EnemyPresentation>();
+                visual.MovementPulse(direction);
+                visual.Tick(.055f, EnemyColor.Green, 0);
+                string side = direction > 0 ? "right" : "left";
+                GameplayChecks.Capture(540, 960, "green-arrow-" + side + "-portrait");
+                GameplayChecks.Capture(960, 540, "green-arrow-" + side + "-landscape");
+                GameplayChecks.Capture(390, 844, "green-arrow-" + side + "-phone");
+            }
             green.GetComponent<EnemyPresentation>().Clear();
             var purple = ProgressionChecks.Add(grid, EnemyColor.Purple, 2, 1);
             purple.GetComponent<EnemyPresentation>().SummonFlash();

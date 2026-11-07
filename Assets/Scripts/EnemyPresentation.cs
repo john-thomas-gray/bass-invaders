@@ -3,6 +3,7 @@ using UnityEngine;
 namespace CandyCruisers
 {
     // Presentation-only effects. Gameplay never depends on animation completion callbacks.
+    [DefaultExecutionOrder(20)]
     public sealed class EnemyPresentation : MonoBehaviour
     {
         private SpriteRenderer body;
@@ -61,7 +62,13 @@ namespace CandyCruisers
             yellowRevealAge + .0001f < yellowRevealArrivalSeconds + yellowRevealReturnSeconds;
         private float movementPulseRemaining;
         public const float MovementPulseSeconds = .38f;
-        private LineRenderer[] surgeGlow, surgeCore;
+        private Transform movementArrow;
+        private MeshRenderer[] movementArrowLayers;
+        private MaterialPropertyBlock movementArrowTint;
+        private EnemyGridMovement arrowFleet;
+        private int movementArrowDirection = 1, arrowFleetDirection = 1;
+        private static Mesh movementArrowMesh;
+        private static Material movementArrowMaterial;
         public const float SummonFlashSeconds = .42f;
         private float summonFlashRemaining;
         private LineRenderer summonGlow, summonCore;
@@ -81,7 +88,9 @@ namespace CandyCruisers
         public void MovementPulse(int direction = 1)
         {
             if (body == null) return;
-            EnsureSurge();
+            EnsureMovementArrow();
+            movementArrowDirection = direction < 0 ? -1 : 1;
+            arrowFleetDirection = arrowFleet != null ? arrowFleet.Direction : movementArrowDirection;
             movementPulseRemaining = MovementPulseSeconds;
             Tick(0, EnemyColor.Green, 0);
         }
@@ -246,7 +255,7 @@ namespace CandyCruisers
             if (color == EnemyColor.Green && movementPulseRemaining > 0)
                 body.color = Color.Lerp(body.color, new Color(.85f, 1, .9f),
                     Mathf.Min(1, movementPulseRemaining * 8));
-            PresentMovementSurge(color);
+            PresentMovementArrow(color);
             PresentSummonFlash(color);
             if (phaseRemaining > 0) body.color = new Color(body.color.r, body.color.g, body.color.b, SpawnOpacity);
             if (growing)
@@ -396,59 +405,88 @@ namespace CandyCruisers
                 }
             }
         }
-        private void EnsureSurge()
+        private void EnsureMovementArrow()
         {
-            if (surgeGlow != null) return;
-            surgeGlow = new LineRenderer[5];
-            surgeCore = new LineRenderer[5];
-            for (int i = 0; i < surgeGlow.Length; i++)
+            if (movementArrow != null) return;
+            if (movementArrowMesh == null)
             {
-                surgeGlow[i] = Line("Green surge glow " + i, i == 0 ? 25 : 7, .065f);
-                surgeCore[i] = Line("Green surge core " + i, i == 0 ? 25 : 7, .018f);
-                surgeGlow[i].useWorldSpace = surgeCore[i].useWorldSpace = false;
-                surgeCore[i].sortingOrder++;
+                movementArrowMesh = new Mesh { name = "Green rhythm arrow" };
+                movementArrowMesh.vertices = new[] {
+                    new Vector3(-.5f, -.17f), new Vector3(-.08f, -.17f), new Vector3(-.08f, -.4f),
+                    new Vector3(.5f, 0), new Vector3(-.08f, .4f), new Vector3(-.08f, .17f), new Vector3(-.5f, .17f)
+                };
+                movementArrowMesh.triangles = new[] { 0, 1, 5, 0, 5, 6, 2, 3, 4 };
+                movementArrowMesh.colors = new[] { Color.white, Color.white, Color.white, Color.white,
+                    Color.white, Color.white, Color.white };
+                movementArrowMesh.uv = new[] { new Vector2(0, .3f), new Vector2(.42f, .3f), new Vector2(.42f, 0),
+                    new Vector2(1, .5f), new Vector2(.42f, 1), new Vector2(.42f, .7f), new Vector2(0, .7f) };
+                movementArrowMesh.RecalculateBounds();
+            }
+            if (movementArrowMaterial == null)
+                movementArrowMaterial = new Material(Shader.Find("Sprites/Default")) { name = "Green rhythm arrow" };
+            movementArrow = new GameObject("Green movement arrow").transform;
+            movementArrow.SetParent(GetComponent<GridEnemy>().Visuals.Root, false);
+            arrowFleet = GetComponentInParent<EnemyGridMovement>();
+            movementArrowTint = new MaterialPropertyBlock();
+            movementArrowLayers = new MeshRenderer[3];
+            string[] names = { "outline", "rim", "fill" };
+            float[] scales = { 1.12f, 1, .8f };
+            for (int i = 0; i < movementArrowLayers.Length; i++)
+            {
+                var child = new GameObject("Green arrow " + names[i], typeof(MeshFilter), typeof(MeshRenderer));
+                child.transform.SetParent(movementArrow, false);
+                child.transform.localScale = Vector3.one * scales[i];
+                child.GetComponent<MeshFilter>().sharedMesh = movementArrowMesh;
+                var renderer = movementArrowLayers[i] = child.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = movementArrowMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sortingLayerID = body.sortingLayerID;
+                renderer.sortingOrder = body.sortingOrder + 4 + i;
+                renderer.enabled = false;
             }
         }
 
-        private void PresentMovementSurge(EnemyColor color)
+        private void RefreshMovementArrowDirection()
         {
-            if (surgeGlow == null) return;
+            if (movementArrow == null) return;
+            // Follow a reversal during the pulse while retaining explicit preview directions.
+            if (arrowFleet != null && arrowFleet.Direction != arrowFleetDirection)
+                movementArrowDirection = arrowFleetDirection = arrowFleet.Direction;
+            movementArrow.rotation = Quaternion.Euler(0, 0, movementArrowDirection < 0 ? 180 : 0);
+        }
+
+        private void LateUpdate()
+        {
+            // Resolve placement after fleet movement and the actor's beat-scale animation.
+            if (movementArrow != null && movementPulseRemaining > 0)
+                PresentMovementArrow(GetComponent<GridEnemy>().Color);
+        }
+
+        private void PresentMovementArrow(EnemyColor color)
+        {
+            if (movementArrow == null) return;
             bool active = color == EnemyColor.Green && movementPulseRemaining > 0;
-            float age = MovementPulseSeconds - movementPulseRemaining;
-            float fade = Mathf.Min(1, movementPulseRemaining / .12f);
-            float radius = Mathf.Max(body.bounds.extents.x, body.bounds.extents.y);
-            int frame = Mathf.FloorToInt(age * 24);
-            for (int arc = 0; arc < surgeGlow.Length; arc++)
+            foreach (var renderer in movementArrowLayers) renderer.enabled = active;
+            if (!active) return;
+            RefreshMovementArrowDirection();
+            float progress = 1 - movementPulseRemaining / MovementPulseSeconds;
+            float width = Mathf.Clamp(Mathf.Max(body.bounds.size.x, body.bounds.size.y) * 1.8f, 1.05f, 1.35f) *
+                (1 + .12f * Mathf.Sin(progress * Mathf.PI));
+            var parentScale = movementArrow.parent.lossyScale;
+            movementArrow.localScale = new Vector3(width / Mathf.Max(.001f, Mathf.Abs(parentScale.x)),
+                width / Mathf.Max(.001f, Mathf.Abs(parentScale.y)), 1);
+            var center = body.bounds.center + Vector3.right * movementArrowDirection * .09f * Mathf.SmoothStep(0, 1, progress);
+            float edge = PlayerMovement.HalfWidth - width * .56f - .025f;
+            center.x = Mathf.Clamp(center.x, -edge, edge);
+            movementArrow.position = center;
+            float fade = Mathf.Clamp01(movementPulseRemaining / .14f);
+            for (int i = 0; i < movementArrowLayers.Length; i++)
             {
-                var glow = surgeGlow[arc];
-                var core = surgeCore[arc];
-                glow.enabled = core.enabled = active;
-                if (!active) continue;
-                glow.startColor = glow.endColor = new Color(.05f, 1, .2f, .9f * fade);
-                core.startColor = core.endColor = new Color(.8f, 1, .65f, fade);
-                for (int i = 0; i < glow.positionCount; i++)
-                {
-                    float t = (float)i / (glow.positionCount - 1);
-                    // Deterministic flicker never consumes the gameplay random sequence.
-                    float jitter = Mathf.Sin((i % 24) * 17.7f + arc * 9.3f + frame * 13.1f);
-                    Vector3 offset;
-                    if (arc == 0)
-                    {
-                        float angle = t * Mathf.PI * 2;
-                        float reach = radius * (1.14f + .22f * jitter);
-                        offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * reach;
-                    }
-                    else
-                    {
-                        float angle = arc * Mathf.PI * .5f + .35f * Mathf.Sin(frame * 2 + arc);
-                        var outward = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle));
-                        var side = new Vector3(-outward.y, outward.x);
-                        offset = outward * radius * (.8f + t * 1.05f) + side * radius * jitter * .27f;
-                    }
-                    Vector3 point = glow.transform.InverseTransformPoint(body.bounds.center + offset);
-                    glow.SetPosition(i, point);
-                    core.SetPosition(i, point);
-                }
+                var tint = i == 0 ? new Color(.025f, .13f, .08f) : i == 1 ? Color.white : new Color(.15f, 1, .45f);
+                tint.a = fade;
+                movementArrowTint.SetColor("_Color", tint);
+                movementArrowLayers[i].SetPropertyBlock(movementArrowTint);
             }
         }
 
@@ -495,8 +533,8 @@ namespace CandyCruisers
             tendril.enabled = portal.enabled = streak.enabled = imitation.enabled = false;
             if (dashLines != null) foreach (var line in dashLines) line.enabled = false;
             if (feedingTendrils != null) foreach (var line in feedingTendrils) line.enabled = false;
-            if (surgeGlow != null)
-                for (int i = 0; i < surgeGlow.Length; i++) surgeGlow[i].enabled = surgeCore[i].enabled = false;
+            if (movementArrowLayers != null)
+                foreach (var renderer in movementArrowLayers) renderer.enabled = false;
             if (summonGlow != null) summonGlow.enabled = summonCore.enabled = false;
         }
         private void OnDisable() => Clear();

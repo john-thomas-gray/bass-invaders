@@ -1,0 +1,39 @@
+Shader "CandyCruisers/StarColors"
+{
+    Properties { _MainTex ("Stars", 2D) = "white" {} }
+    SubShader
+    {
+        Tags { "Queue"="Transparent" "RenderType"="Transparent" }
+        Cull Off ZWrite Off Lighting Off
+        Blend SrcAlpha OneMinusSrcAlpha
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+            sampler2D _MainTex;
+            float _Magic, _Phase;
+            float4 _Palette[6];
+            struct input { float4 vertex : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
+            struct output { float4 vertex : SV_POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
+            output vert(input v)
+            {
+                output o; o.vertex = UnityObjectToClipPos(v.vertex); o.uv = v.uv; o.color = v.color; return o;
+            }
+            fixed4 frag(output i) : SV_Target
+            {
+                fixed4 tex = tex2D(_MainTex, i.uv);
+                float4 tint = i.color;
+                if (_Magic > .5)
+                {
+                    float2 cell = floor(i.uv * float2(12, 21));
+                    int index = (int)fmod(floor(_Phase) + floor(frac(sin(dot(cell, float2(127.1,311.7))) * 43758.5453) * 6), 6);
+                    tint.rgb = _Palette[index].rgb * i.color.r;
+                }
+                return tex * tint;
+            }
+            ENDCG
+        }
+    }
+}

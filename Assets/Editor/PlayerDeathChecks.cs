@@ -191,6 +191,7 @@ namespace CandyCruisers.Editor
                     var missile = new GameObject("Recovery missile", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                     missile.transform.position = player.transform.position + Vector3.up;
                     missile.SetTarget(player);
+                    SpecialEnemyChecks.StartAtCruiseSpeed(missile);
                     missile.Tick(.3f);
                     Check(missile.Finished, "Missile hits the player");
                 }

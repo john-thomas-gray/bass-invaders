@@ -61,7 +61,7 @@ namespace CandyCruisers.Editor
                 missile.SetTarget(player);
                 missile.transform.position = player.transform.position + Vector3.up * 2;
                 player.Fire();
-                missile.Tick(1);
+                missile.Tick(2);
                 Check(missile.Finished && !player.Alive && player.Lives == PlayerMovement.MaxLives - 1 && !player.Fire(),
                     "Swept missile hit spends one life and disables player");
                 Check(!player.GetComponentInChildren<TongueShot>().Active && !player.Hit(), "Hit cancels tongue and cannot stack");

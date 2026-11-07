@@ -15,6 +15,17 @@ namespace CandyCruisers
         public GridModel Model { get; } = new GridModel();
         private readonly Dictionary<int, GridEnemy> views = new Dictionary<int, GridEnemy>();
         public FleetState Fleet => Model.Fleet;
+        public int SpecialGreenCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (var enemy in views.Values)
+                    if (enemy != null && enemy.isActiveAndEnabled && enemy.IsSpecial && enemy.Color == EnemyColor.Green)
+                        count++;
+                return count;
+            }
+        }
         private BlueGroupShield groupShield;
         private readonly List<PresentationCue> deaths = new List<PresentationCue>();
         public bool HasDeathEffects => deaths.Exists(effect => effect != null && !effect.Finished);
@@ -428,7 +439,7 @@ namespace CandyCruisers
             return found;
         }
 
-        public enum TongueHitResult { Stopped, Deflected, PassThrough }
+        public enum TongueHitResult { Stopped, Deflected, PassThrough, ShieldAbsorbed }
 
         public TongueHitResult ResolveTongueHit(int id, EnemyColor color, bool magic = false)
         {
@@ -440,7 +451,8 @@ namespace CandyCruisers
             }
             var abilities = enemy.GetComponent<EnemyAbilities>();
             if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.RevealDisguise(color)) return TongueHitResult.PassThrough;
-            if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.Absorb(color)) return TongueHitResult.Stopped;
+            if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.Absorb(color))
+                return enemy.IsSpecial ? TongueHitResult.Stopped : TongueHitResult.ShieldAbsorbed;
             if (magic) ClearMagicChain(id, 0);
             else ClearMatchingChain(id, color);
             return TongueHitResult.Stopped;

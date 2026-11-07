@@ -83,7 +83,7 @@ namespace CandyCruisers
         public float? PreviewTime { get; set; }
         public float PreviewTempo { get; set; } = 120;
         private float FixedBeatDuration => 60f / Mathf.Max(1, PreviewTime.HasValue ? PreviewTempo : CurrentSong?.beatsPerMinute ?? beatsPerMinute);
-        public float CurrentTempo => 60f / BeatDuration;
+        public float CurrentTempo => 60f / BeatDuration * (session != null ? session.MusicTempoMultiplier : 1);
         public float CurrentBeatOffset => PreviewTime.HasValue ? 0 : CurrentBeatMap?.FirstBeatTime ?? CurrentSong?.beatOffsetSeconds ?? beatOffsetSeconds;
         public bool UsesBeatMap => CurrentBeatMap != null;
         private SongBeatMap CurrentBeatMap
@@ -124,6 +124,8 @@ namespace CandyCruisers
         public bool BeatClockRunning => PreviewTime.HasValue || Source.isPlaying;
         public float PlaybackSeconds => PreviewTime ?? (Source.clip != null ?
             Source.timeSamples / (float)Mathf.Max(1, Source.clip.frequency) : 0);
+        // These durations use song/game seconds: both playback and game time receive
+        // the same tempo multiplier, so beat-driven actions must not apply it twice.
         public float BeatDuration => CurrentBeatMap?.DurationAtTime(PlaybackSeconds) ?? FixedBeatDuration;
         public static float BeatPulse(float beatPosition, bool offbeat = false) =>
             Mathf.Pow(Mathf.Max(0, Mathf.Cos((beatPosition - (offbeat ? .5f : 0)) * Mathf.PI * 2)), 4);
@@ -487,7 +489,8 @@ namespace CandyCruisers
                 UsesCustomTrack && (carriedMenuTrack == null || carriedMenuTrack == track));
             source.spatialBlend = 0;
             source.dopplerLevel = 0;
-            source.pitch = dying ? Mathf.Pow(DeathMinimumPitch, session.GameOverBlackoutOpacity) : 1;
+            source.pitch = (session != null ? session.MusicTempoMultiplier : 1) *
+                (dying ? Mathf.Pow(DeathMinimumPitch, session.GameOverBlackoutOpacity) : 1);
             source.volume = volume * MusicLoudness.GainFor(source.clip) * (session != null ? session.GameOverMusicGain : 1);
             source.mute = muted;
         }

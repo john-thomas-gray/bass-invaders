@@ -464,6 +464,7 @@ namespace CandyCruisers.Editor
                     YellowTransformationChecks.Run();
                     TouchControlChecks.Run();
                     SpecialEnemyChecks.Run();
+                    SpecialGreenTempoChecks.Run();
                     AbilityBeatChecks.Run();
                     PurpleYellowSpecialChecks.Run();
                     PresentationChecks.Run();

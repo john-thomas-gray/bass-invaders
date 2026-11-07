@@ -115,6 +115,24 @@ namespace CandyCruisers
             return summoned;
         }
 
+        public bool CanSummon(GridEnemy source)
+        {
+            if (!isActiveAndEnabled || source == null || !source.isActiveAndEnabled) return false;
+            if (grid == null) grid = GetComponent<EnemyGrid>();
+            if (grid.View(source.Id) != source) return false;
+            var session = GetComponent<GameSession>();
+            if (session != null && (session.State != GameSession.RunState.Playing || session.IsPaused)) return false;
+            var colors = SpawnColors();
+            if (colors.Count == 0) return false;
+            var candidates = SummonCandidates(grid.Model, source.Color == EnemyColor.Purple && source.IsSpecial);
+            foreach (int anchor in new System.Collections.Generic.List<int>(candidates.Keys))
+            {
+                candidates[anchor].RemoveAll(cell => !colors.Exists(color => CanSpawn(color, cell.x, cell.y)));
+                if (candidates[anchor].Count == 0) candidates.Remove(anchor);
+            }
+            return candidates.Count > 0;
+        }
+
         public System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<Vector2Int>> SummonCandidates(GridModel model, bool special = false)
         {
             var candidates = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<Vector2Int>>();
@@ -142,10 +160,24 @@ namespace CandyCruisers
                 candidates[anchor].RemoveAll(cell =>
                     (special ? cell.y > lowestOccupiedRow + 1 :
                         row == farthest / GridModel.Columns && (cell.y > row || anchor == farthest && cell.x > column)) ||
+                    !FitsWaveRowWidth(model, cell) ||
                     Mathf.Abs(transform.TransformPoint(GetComponent<EnemyGrid>().CellPosition(cell.x, cell.y)).x) + .375f > PlayerMovement.HalfWidth + .00001f);
                 if (candidates[anchor].Count == 0) candidates.Remove(anchor);
             }
             return candidates;
+        }
+
+        private bool FitsWaveRowWidth(GridModel model, Vector2Int cell)
+        {
+            int maximum = Fleet.ActivePlan != null ? Fleet.ActivePlan.Columns : CurrentRowWidth;
+            int first = cell.x, last = cell.x;
+            for (int column = 0; column < GridModel.Columns; column++)
+            {
+                if (model.At(column, cell.y) == null) continue;
+                first = Mathf.Min(first, column);
+                last = Mathf.Max(last, column);
+            }
+            return last - first + 1 <= maximum;
         }
 
         private void OnEnable()

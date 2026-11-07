@@ -32,6 +32,7 @@ namespace CandyCruisers
         public static float DeflectedReturnSpeed(int level) => 20f * Mathf.Max(.01f, .25f - .01f * Mathf.Max(1, level));
         public bool Active { get; private set; }
         public bool LastCompletionCancelled { get; private set; }
+        public bool HitRegularShield { get; private set; }
         public bool Retracting => Active && travel >= maximumLength;
         public float Length => Active ? (Retracting ? Mathf.Max(0, 2 * maximumLength - travel) : travel) : 0;
         public float ReturnSpeed => deflectedRetractSpeed > 0 ? deflectedRetractSpeed : retractSpeed * (IsMagic ? 4 : 1);
@@ -118,6 +119,7 @@ namespace CandyCruisers
             travel = 0;
             Active = true;
             LastCompletionCancelled = false;
+            HitRegularShield = false;
             SetVisualColor(color, magic);
             Draw();
             ExtensionStarted?.Invoke();
@@ -203,6 +205,7 @@ namespace CandyCruisers
                         var result = grid.ResolveTongueHit(id, ShotColor);
                         if (!Active) return;
                         if (result == EnemyGrid.TongueHitResult.PassThrough) continue;
+                        HitRegularShield = result == EnemyGrid.TongueHitResult.ShieldAbsorbed;
                         seconds -= (hitLength - travel) / extensionRate;
                         if (result == EnemyGrid.TongueHitResult.Deflected)
                         {

@@ -211,6 +211,7 @@ namespace CandyCruisers.Editor
                 Check(!homing.Homing, "Special Red launches an aimed straight shot, not a homing missile");
                 // Retain checks for the unused legacy homing mode.
                 homing.SetTarget(player, true);
+                StartAtCruiseSpeed(homing);
                 homing.transform.position = new Vector3(-2, 2, 0);
                 player.transform.position = new Vector3(2, -4.6f, 0);
                 homing.Tick(.4f);
@@ -229,6 +230,7 @@ namespace CandyCruisers.Editor
                 var coarse = new GameObject("Coarse homing", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                 var fine = new GameObject("Fine homing", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                 coarse.SetTarget(player, true); fine.SetTarget(player, true);
+                StartAtCruiseSpeed(coarse); StartAtCruiseSpeed(fine);
                 coarse.transform.position = fine.transform.position = new Vector3(-2, 2, 0);
                 coarse.Tick(.5f);
                 for (int i = 0; i < 60; i++) fine.Tick(1f / 120);
@@ -238,6 +240,7 @@ namespace CandyCruisers.Editor
                 UnityEngine.Object.DestroyImmediate(fine.gameObject);
                 var limited = new GameObject("Limited homing", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                 limited.SetTarget(player, true);
+                StartAtCruiseSpeed(limited);
                 limited.transform.position = new Vector3(-2.9f, 5.29f, 0);
                 for (int step = 0; step < 360; step++)
                 {
@@ -262,6 +265,7 @@ namespace CandyCruisers.Editor
                 {
                     var escaped = new GameObject("Offscreen homing", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                     escaped.SetTarget(player, true);
+                    StartAtCruiseSpeed(escaped);
                     escaped.transform.position = new Vector3(side * (PlayerMovement.HalfWidth + .01f), 0, 0);
                     var outside = escaped.transform.position;
                     escaped.Tick(.5f);
@@ -272,12 +276,14 @@ namespace CandyCruisers.Editor
                 player.transform.position = new Vector3(2, -4.6f, 0);
                 var incoming = new GameObject("Incoming homing", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                 incoming.SetTarget(player, true);
+                StartAtCruiseSpeed(incoming);
                 incoming.transform.position = player.transform.position + Vector3.up * 2;
                 incoming.Tick(1);
                 Check(incoming.Finished && !player.Alive, "Swept homing collision cannot tunnel through the player");
                 UnityEngine.Object.DestroyImmediate(incoming.gameObject);
                 var ordinary = new GameObject("Straight missile", typeof(EnemyMissile)).GetComponent<EnemyMissile>();
                 ordinary.SetTarget(player);
+                StartAtCruiseSpeed(ordinary);
                 Check(ordinary.SmokeTrail != null && !ordinary.SmokeTrail.enabled, "Ordinary missile smoke trail starts empty");
                 ordinary.transform.position = new Vector3(-2, 2, 0);
                 ordinary.Tick(.5f);
@@ -305,6 +311,7 @@ namespace CandyCruisers.Editor
                 renderer.color = EnemyPalette.Get(EnemyColor.Red);
                 var original = renderer.color;
                 var pulse = flashing.GetComponent<EnemyMissile>();
+                StartAtCruiseSpeed(pulse);
                 // This fallback-tempo check must not borrow the live scene's song clock.
                 var flashClock = flashing.AddComponent<GameplayMusicPlayer>();
                 flashClock.enabled = false;
@@ -589,6 +596,15 @@ namespace CandyCruisers.Editor
                 shock.Begin(); player.ResetForRun();
                 Check(!shock.Active && pupil.transform.localScale == pupilScale, "Restart clears soot, smoke and pupil changes");
             });
+        }
+
+        internal static void StartAtCruiseSpeed(EnemyMissile missile)
+        {
+            // Steering, boundary and trail checks isolate cruising behavior.
+            // AimedRedChecks covers the prefab's backward launch and acceleration.
+            var settings = new SerializedObject(missile);
+            settings.FindProperty("launchSpeedRatio").floatValue = 1;
+            settings.ApplyModifiedPropertiesWithoutUndo();
         }
 
         internal static void Fixture(Action<EnemyGrid, PlayerMovement, TongueShot> check)

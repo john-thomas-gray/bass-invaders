@@ -51,6 +51,9 @@ namespace CandyCruisers
         private float levelCrossFadeRemaining;
         private float wavePulseRemaining;
         private int displayedLevel = -1;
+        private int appliedLevelBackground = -1;
+        private float levelBackgroundFadeRemaining;
+        private Material starColorMaterial;
         private int spinDirection = 1;
         private Color transitionFrom = Color.white;
         private Color transitionTo = Color.white;
@@ -87,6 +90,11 @@ namespace CandyCruisers
         }
         private void OnDestroy()
         {
+            if (starColorMaterial != null)
+            {
+                if (Application.isPlaying) Destroy(starColorMaterial);
+                else DestroyImmediate(starColorMaterial);
+            }
             BindSession(null);
             if (crossFadeBackground != null)
             {
@@ -173,6 +181,7 @@ namespace CandyCruisers
             if (session != null && session.CurrentLevelDefinition != null)
             {
                 displayedLevel = level;
+                levelBackgroundFadeRemaining = Mathf.Max(0, levelBackgroundFadeRemaining - seconds);
                 wavePulseRemaining = levelCrossFadeRemaining = 0;
                 Refresh();
                 return;
@@ -219,21 +228,60 @@ namespace CandyCruisers
             if (crossFadeBackground != null) crossFadeBackground.enabled = false;
             var image = session.State == GameSession.RunState.MainMenu ? null : session.CurrentLevelDefinition.backgroundImage;
             if (starBackground == null) return;
+            int level = session.Progress.Level;
+            if (appliedLevelBackground != level)
+            {
+                appliedLevelBackground = level;
+                levelBackgroundFadeRemaining = level == 2 && image != null ? levelCrossFadeSeconds : 0;
+            }
             starBackground.enabled = image != null;
             if (image == null) return;
             starBackground.sprite = image;
-            starBackground.color = Color.white;
+            float fade = levelBackgroundFadeRemaining > 0
+                ? 1f - levelBackgroundFadeRemaining / levelCrossFadeSeconds : 1f;
+            var color = session.ProgressBarColor;
+            if (color == Color.clear || color == Color.gray) color = TintForLevel(level);
+            float beat = FindFirstObjectByType<GameplayMusicPlayer>()?.BeatPosition ?? 0;
+            float pulse = GameplayMusicPlayer.BeatPulse(beat);
+            var player = FindFirstObjectByType<PlayerMovement>();
+            bool magic = player != null && player.MagicPowerActive;
+            if (starColorMaterial == null)
+            {
+                var shader = Resources.Load<Shader>("StarColors");
+                if (shader != null) starColorMaterial = new Material(shader);
+            }
+            if (starColorMaterial != null)
+            {
+                starBackground.sharedMaterial = starColorMaterial;
+                starColorMaterial.SetFloat("_Magic", magic ? 1 : 0);
+                var music = player != null ? player.Music : null;
+                float phase = music != null && music.InGameplayRun ? Mathf.Max(0, music.BeatPosition) * 4 : Time.time * 10;
+                starColorMaterial.SetFloat("_Phase", phase);
+                var palette = new Vector4[6];
+                for (int i = 0; i < palette.Length; i++) palette[i] = EnemyPalette.Get(EnemyPalette.CycleColor(i));
+                starColorMaterial.SetVectorArray("_Palette", palette);
+            }
+            if (magic) color = Color.white;
+            color = Color.Lerp(Color.black, color, Mathf.SmoothStep(0, 1, fade));
+            color = Color.Lerp(color, Color.white, .22f * pulse);
+            color.a *= Mathf.Lerp(.72f, 1f, pulse);
+            starBackground.color = color;
             starBackground.sortingOrder = -100;
             starBackground.transform.rotation = Quaternion.identity;
             var position = view.transform.position;
             position.z = starBackground.transform.position.z;
             starBackground.transform.position = position;
             var size = image.bounds.size;
-            float scale = Mathf.Max(2 * view.orthographicSize * view.aspect / Mathf.Max(.001f, size.x),
-                2 * view.orthographicSize / Mathf.Max(.001f, size.y)) / WaveCrunchScale;
+            // Keep the complete authored background inside the fixed gameplay frame.
+            // The camera is wider on desktop, but the playfield border remains the limiting area.
+            float frameWidth = 2f * (PlayerMovement.HalfWidth - PlayfieldFrame.BoundaryLineWidth);
+            float frameHeight = 2f * (PlayfieldFrame.OuterTopY - PlayfieldFrame.BoundaryLineWidth);
+            float pulseScale = 1f + .08f * pulse;
+            float scale = Mathf.Min(frameWidth / Mathf.Max(.001f, size.x),
+                frameHeight / Mathf.Max(.001f, size.y)) / (WaveCrunchScale * pulseScale);
             // Fit the sprite's bounds even when its artist chose an off-center pivot.
-            starBackground.transform.localScale = Vector3.one * scale;
-            starBackground.transform.position -= (Vector3)image.bounds.center * scale;
+            starBackground.transform.localScale = Vector3.one * (scale * pulseScale);
+            starBackground.transform.position -= (Vector3)image.bounds.center * (scale * pulseScale);
         }
 
         public void TriggerWaveSpawnEffect()

@@ -13,8 +13,72 @@ namespace CandyCruisers.Editor
             foreach (bool fullClear in new[] { false, true }) CheckMagic(step, fullClear);
             foreach (bool magic in new[] { false, true })
             foreach (bool hitYellow in new[] { false, true }) CheckYellowLink(magic, hitYellow);
+            foreach (float step in new[] { .001f, .016f, .1f, 2f })
+            foreach (bool special in new[] { false, true }) CheckShieldCombo(step, special);
             CheckDamageReset();
-            Debug.Log("Shot color combo checks passed: immediate per-color streaks, next-contact scoring, repeated colors, Yellow links, frame timing, fleet clears and damage reset.");
+            Debug.Log("Shot color combo checks passed: immediate per-color streaks, next-contact scoring, repeated colors, Yellow links, regular shield preservation, special shield breaks, frame timing, fleet clears and damage reset.");
+        }
+
+        private static void CheckShieldCombo(float step, bool special)
+        {
+            WithSession((grid, player, tongue, session) =>
+            {
+                // Keep this synchronous shield check on the fallback ability clock.
+                var music = grid.GetComponent<GameplayMusicPlayer>();
+                music.Source.Stop(); music.Source.clip = null;
+                Add(grid, EnemyColor.Red, 0, 0);
+                player.RefreshColor(true);
+                var blue = Add(grid, EnemyColor.Blue, 2, 3);
+                if (special)
+                {
+                    Add(grid, EnemyColor.Blue, 1, 3);
+                    Add(grid, EnemyColor.Blue, 3, 3);
+                    grid.RefreshSpecials();
+                }
+                var shield = blue.GetComponent<EnemyAbilities>();
+                shield.Tick(shield.CooldownRemaining + .35f);
+                Check(shield.ShieldActive && blue.IsSpecial == special, "The intended Blue shield is active");
+                for (int i = 0; i < 4; i++)
+                {
+                    session.Progress.BeginShot();
+                    session.Progress.RegisterShotColor(EnemyColor.Red);
+                    session.Progress.FinishShot(true);
+                }
+                session.Tick(0);
+                bool? completedHit = null;
+                player.ShotCompleted += hit => completedHit = hit;
+                Action<bool> retraction = hit =>
+                {
+                    Check(!hit && session.Progress.ComboStreak == (special ? 0 : 4),
+                        "Regular shield contact preserves the streak as the tongue begins returning");
+                    Check(session.ComboBreak.Active == special, "Only the special shield starts the combo-break animation");
+                };
+                player.ShotRetractionStarted += retraction;
+                player.transform.position = new Vector3(blue.transform.position.x, -4.6f, 0);
+                Check(player.Fire() && tongue.ShotColor == EnemyColor.Red && !tongue.IsMagic,
+                    "Fire a mismatched ordinary shot at the shield");
+                for (int i = 0; tongue.Active && i < 2000; i++) tongue.Tick(step, grid);
+                player.ShotRetractionStarted -= retraction;
+                Check(!tongue.Active && completedHit == false && session.Progress.Score == 0 && session.Progress.Defeated == 0,
+                    "A shield-only shot awards no kills, score or successful enemy-hit credit");
+                Check(tongue.HitRegularShield == !special && session.Progress.ComboStreak == (special ? 0 : 4),
+                    "Regular shield contact preserves the combo after the tongue arrives without advancing it");
+                Check(shield.ShieldActive == special && grid.View(blue.Id) == blue,
+                    "The ordinary shield is spent while the Blue enemy survives");
+                if (special) return;
+
+                var red = Add(grid, EnemyColor.Red, 2, 5);
+                for (int i = 0; i < 100 && player.ReadyColor != EnemyColor.Red; i++) player.RefreshColor(true);
+                Check(player.Fire() && !tongue.HitRegularShield, "The next accepted shot clears the shield-contact flag");
+                tongue.Tick(2, grid);
+                Check(grid.View(red.Id) == null && session.Progress.Score == 500 && session.Progress.ComboStreak == 5,
+                    "The next enemy clear uses the preserved x5 multiplier and advances the streak once");
+                player.transform.position = new Vector3(-2.9f, -4.6f, 0);
+                Check(player.Fire(), "Fire the next shot down an empty column");
+                tongue.Tick(2, grid);
+                Check(!tongue.Active && session.Progress.ComboStreak == 0 && session.ComboBreak.Active,
+                    "A later real miss still breaks the combo");
+            });
         }
 
         private static void CheckMagic(float step, bool fullClear)

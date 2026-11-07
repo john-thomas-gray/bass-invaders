@@ -4,6 +4,8 @@ namespace CandyCruisers
 {
     public static class CombatBalance
     {
+        public const float SpecialGreenTempoIncrease = .03f;
+
         public static float FleetSpeedMultiplier(int level) => Mathf.Min(2, 1 + .03f * Mathf.Max(0, level - 1));
 
         public static Vector2Int CooldownBeats(EnemyColor color, int level, bool special = false)
