@@ -41,11 +41,11 @@ namespace CandyCruisers
             switch (color)
             {
                 case EnemyColor.Blue: return new Vector2(1, 1);
-                case EnemyColor.Green: return new Vector2(2, 4);
+                case EnemyColor.Green: return new Vector2(2, 16);
                 case EnemyColor.Purple: return new Vector2(8, 24);
-                case EnemyColor.Yellow: return new Vector2(2, 4);
-                case EnemyColor.Orange: return new Vector2(2, 1);
-                default: return new Vector2(3, 5);
+                case EnemyColor.Yellow: return new Vector2(2, 10);
+                case EnemyColor.Orange: return new Vector2(1, 1);
+                default: return new Vector2(3, 18);
             }
         }
     }
