@@ -106,6 +106,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CandyCruisers.EnemyMissile
   speed: 5
+  launchSpeedRatio: -0.1
+  accelerationSeconds: 2
   homingSpeed: 3.5
   smokeTrailScreenRatio: 0.33333334
   smokeTrailWidthRatio: 0.5

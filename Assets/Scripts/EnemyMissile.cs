@@ -5,6 +5,10 @@ namespace CandyCruisers
     public sealed class EnemyMissile : MonoBehaviour
     {
         [SerializeField, Min(0.1f)] private float speed = 5f;
+        [SerializeField, Range(-50f, 1f), Tooltip("Fraction of full flight speed at launch; negative values briefly move backward.")]
+        private float launchSpeedRatio = -.1f;
+        [SerializeField, Min(.01f), Tooltip("Seconds over which the missile accelerates to full flight speed.")]
+        private float accelerationSeconds = 2f;
         private PlayerMovement target;
         private float age;
         private Vector3 direction = Vector3.down;
@@ -225,7 +229,10 @@ namespace CandyCruisers
                 direction = Quaternion.Euler(0, 0, headingDegrees) * Vector3.down;
                 transform.rotation = Quaternion.Euler(0, 0, headingDegrees);
             }
-            float currentSpeed = Homing || Aimed ? homingSpeed : speed;
+            float fullSpeed = Homing || Aimed ? homingSpeed : speed;
+            float launchSpeed = fullSpeed * Mathf.Clamp(launchSpeedRatio, -1f, 1f);
+            float acceleration = Mathf.Clamp01(age / Mathf.Max(.01f, accelerationSeconds));
+            float currentSpeed = Mathf.Lerp(launchSpeed, fullSpeed, acceleration);
             Vector3 after = before + direction * (currentSpeed * seconds);
             age += seconds;
             traveledDistance += Vector3.Distance(before, after);

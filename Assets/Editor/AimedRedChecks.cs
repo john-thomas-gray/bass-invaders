@@ -53,8 +53,9 @@ namespace CandyCruisers.Editor
                     var origin = missile.transform.position;
                     player.transform.position = new Vector3(-side, -4.6f, 0);
                     missile.Tick(.2f);
-                    Check(Vector3.Distance(missile.transform.position, origin + direction * .7f) < .001f,
-                        "Shot flies straight at existing speed after player moves");
+                    float firstDistance = Vector3.Distance(missile.transform.position, origin);
+                    Check(firstDistance > 0 && Vector3.Dot(missile.transform.position - origin, direction) < 0,
+                        "Shot initially bobs backward after launch");
                     Check(smoke != null && smoke.enabled && smoke.positionCount == 4, "Aimed shots draw a smoke trail");
                     var missileSprite = missile.GetComponent<SpriteRenderer>();
                     float missileWidth = missileSprite.sprite.bounds.size.x * Mathf.Abs(missile.transform.lossyScale.x);
@@ -65,12 +66,14 @@ namespace CandyCruisers.Editor
                     float screenThird = (Camera.main != null && Camera.main.orthographic ?
                         Camera.main.orthographicSize * 2 : EnemyMissile.FallbackViewHeight) * EnemyMissile.SmokeTrailScreenRatio;
                     Check(Vector3.Distance(smokeTail, smokeHead) < screenThird &&
-                        Mathf.Abs(Vector3.Distance(smokeTail, smokeHead) - .7f) < .02f,
-                        "Aimed shot smoke trail grows from flight distance before reaching full length");
+                        Mathf.Abs(Vector3.Distance(smokeTail, smokeHead) - firstDistance) < .02f,
+                        "Aimed shot smoke trail grows from the distance actually traveled");
                     float smokeAngle = Vector3.Angle(smokeHead - smokeTail, direction);
                     Check(smokeAngle < .05f,
                         "Aimed shot smoke trail follows the launch direction (" + smokeAngle + " degrees)");
-                    missile.Tick(1);
+                    missile.Tick(2f);
+                    Check(Vector3.Dot(missile.transform.position - origin, direction) > 0,
+                        "Shot reverses direction and moves forward after accelerating");
                     smokeTail = smoke.GetPosition(0); smokeHead = smoke.GetPosition(smoke.positionCount - 1);
                     Check(Mathf.Abs(Vector3.Distance(smokeTail, smokeHead) - screenThird) < .02f,
                         "Aimed shot smoke trail caps at about one third of the screen");
@@ -95,8 +98,9 @@ namespace CandyCruisers.Editor
                     Check(!missile.Aimed && !missile.Homing, "Ordinary Red still fires downward");
                     var start = missile.transform.position;
                     missile.Tick(.2f);
-                    Check(Vector3.Distance(missile.transform.position, start + Vector3.down) < .001f,
-                        "Ordinary projectile speed and heading are unchanged");
+                    float distance = Vector3.Distance(missile.transform.position, start);
+                    Check(distance > 0 && distance < 1,
+                        "Ordinary projectile starts below full speed");
                 });
             }
             finally { foreach (var player in existingPlayers) if (player != null) player.gameObject.SetActive(true); }
@@ -128,8 +132,9 @@ namespace CandyCruisers.Editor
                     "A warning interrupted by respawn fires straight down before the apex and throughout the fall");
                 var origin = missile.transform.position;
                 missile.Tick(.05f);
-                Check(Vector3.Distance(missile.transform.position, origin + Vector3.down * .175f) < .001f,
-                    "Respawn shots preserve special-Red speed while flying straight down");
+                float respawnDistance = Vector3.Distance(missile.transform.position, origin);
+                Check(respawnDistance > 0 && respawnDistance < .175f,
+                    "Respawn shots launch slowly while flying straight down");
                 player.TickSurvival(PlayerLifeIcons.Duration - recoveryAge + .001f);
                 Check(!player.ReplacementFalling && player.RespawnProtectionActive, "Replacement has landed with protection");
                 player.transform.position = new Vector3(-2, -4.6f, 0);
