@@ -13,8 +13,6 @@ Shader "CandyCruisers/StarColors"
             #pragma fragment frag
             #include "UnityCG.cginc"
             sampler2D _MainTex;
-            float _Magic, _Phase;
-            float4 _Palette[6];
             struct input { float4 vertex : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
             struct output { float4 vertex : SV_POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; float2 world : TEXCOORD1; };
             output vert(input v)
@@ -26,14 +24,7 @@ Shader "CandyCruisers/StarColors"
                 clip(2.955 - abs(i.world.x));
                 clip(5.575 - abs(i.world.y));
                 fixed4 tex = tex2D(_MainTex, i.uv);
-                float4 tint = i.color;
-                if (_Magic > .5)
-                {
-                    float2 cell = floor(i.uv * float2(12, 21));
-                    int index = (int)fmod(floor(_Phase) + floor(frac(sin(dot(cell, float2(127.1,311.7))) * 43758.5453) * 6), 6);
-                    tint.rgb = _Palette[index].rgb * i.color.r;
-                }
-                return tex * tint;
+                return tex * i.color;
             }
             ENDCG
         }

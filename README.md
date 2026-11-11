@@ -1,9 +1,9 @@
 # Candy Cruisers V2.0.0
 
-Unity rebuild in the original `john-thomas-gray/color-chameleon` repository.
+Unity rebuild in `john-thomas-gray/bass-invaders` (formerly `john-thomas-gray/color-chameleon`).
 The previous version remains available at the `legacy-v1` tag and in the local
 `/Users/johngray/swe/candy-cruisers-v1-archive` checkout. The active project is
-`/Users/johngray/swe/candy-cruisers`. See [Changelog](CHANGELOG.md).
+`/Users/johngray/swe/bass-invaders`. See [Changelog](CHANGELOG.md).
 
 Level progression is authored in [Assets/Resources/LevelMap.json](Assets/Resources/LevelMap.json).
 Edit that file and start a new run; no Unity level window or level assets are

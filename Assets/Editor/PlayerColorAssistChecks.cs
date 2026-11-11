@@ -197,12 +197,12 @@ namespace CandyCruisers.Editor
                 var weights = grid.PlayerColorWeights();
                 Check(grid.SelectablePlayerColors().SequenceEqual(new[] { EnemyColor.Blue, EnemyColor.Green, EnemyColor.Purple }),
                     "A full Blue barrier excludes colors only above it, even with enemies in front");
-                Check(weights[EnemyColor.Blue] == 240 && weights[EnemyColor.Purple] == 63 && weights[EnemyColor.Green] == 32,
-                    "Barrier Blues get double weight and Purple's population bonus includes all eligible-color enemies");
+                Check(weights[EnemyColor.Blue] == 60 && weights[EnemyColor.Purple] == 9 && weights[EnemyColor.Green] == 8,
+                    "Barrier Blues get double weight while a four-row fleet receives no population bonus");
                 for (int i = 0; i < 100; i++)
                 { player.RefreshColor(true); Check(player.ReadyColor != EnemyColor.Red, "Barrier filtering reaches actual player rerolls"); }
                 Remove(grid, barrier[2]);
-                Check(grid.SelectablePlayerColors().Contains(EnemyColor.Red) && grid.PlayerColorWeights()[EnemyColor.Blue] == 100,
+                Check(grid.SelectablePlayerColors().Contains(EnemyColor.Red) && grid.PlayerColorWeights()[EnemyColor.Blue] == 25,
                     "Breaking the wall restores distant colors and removes the Blue bonus");
             });
 
@@ -320,21 +320,48 @@ namespace CandyCruisers.Editor
             {
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
-                Check(grid.PlayerColorWeights().Count == 0, "Empty fleet has no weighted colors");
-                for (int i = 0; i < 10; i++) Add(grid, i < 1 ? boostedColor : EnemyColor.Red, i % GridModel.Columns, i / GridModel.Columns);
+                for (int row = 0; row < 5; row++) Add(grid, boostedColor, 0, row);
+                Add(grid, EnemyColor.Red, 1, 0);
                 var weights = grid.PlayerColorWeights();
-                Check(weights[boostedColor] == 1 && weights[EnemyColor.Red] == 13, "Below eighteen percent gets no bonus");
-                var converted = grid.Model.At(1, 0);
+                Check(weights[boostedColor] == 15 && weights[EnemyColor.Red] == 1,
+                    "A five-row fleet gets no population bonus even when the color dominates");
+                var sixthRow = Add(grid, boostedColor, 0, 5);
+                weights = grid.PlayerColorWeights();
+                Check(weights[boostedColor] == 147 && weights[EnemyColor.Red] == 4,
+                    "The population bonus activates at exactly six occupied rows");
+                var restricted = grid.PlayerColorWeights(new[] { false, true, false, false, false, false });
+                Check(restricted.Count == 1 && restricted[EnemyColor.Red] == 1,
+                    "The six-row gate preserves reachable-color restrictions");
+                Check(grid.PlayerColorWeights(new[] { true, false, false, false, false, false })[boostedColor] == 147,
+                    "Fleet row count includes enemies outside reachable columns");
+                grid.TryMove(sixthRow.Id, 0, 6);
+                Check(grid.PlayerColorWeights()[boostedColor] == 154,
+                    "Six sparse occupied rows qualify even with a gap");
+                Remove(grid, sixthRow);
+                Check(grid.PlayerColorWeights()[boostedColor] == 15,
+                    "The bonus disappears when the fleet shrinks back to five rows");
+                grid.TryMove(grid.Model.At(1, 0).Id, 1, 6);
+                for (int row = 4; row >= 0; row--) grid.TryMove(grid.Model.At(0, row).Id, 0, row + 6);
+                Check(grid.PlayerColorWeights()[boostedColor] == 45,
+                    "Five rows near the bottom still do not qualify");
+            });
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                Check(grid.PlayerColorWeights().Count == 0, "Empty fleet has no weighted colors");
+                for (int i = 0; i < 12; i++) Add(grid, i < 2 ? boostedColor : EnemyColor.Red, i % 2, i / 2);
+                var weights = grid.PlayerColorWeights();
+                Check(weights[boostedColor] == 2 && weights[EnemyColor.Red] == 40, "Below eighteen percent gets no bonus");
+                var converted = grid.Model.At(0, 1);
                 grid.SetColor(converted.Id, boostedColor);
                 weights = grid.PlayerColorWeights();
-                Check(weights[boostedColor] == 14 && weights[EnemyColor.Red] == 48, "Above eighteen percent applies exact seven-to-four relative weighting");
+                Check(weights[boostedColor] == 28 && weights[EnemyColor.Red] == 152, "Above eighteen percent applies exact seven-to-four relative weighting");
                 UnityEngine.Random.InitState(9031);
                 int greens = 0;
                 for (int i = 0; i < 4000; i++)
                 { player.RefreshColor(true); if (player.ReadyColor == boostedColor) greens++; }
-                Check(greens > 800 && greens < 1010, "Player rerolls use the boosted normalized probability");
+                Check(greens > 520 && greens < 730, "Player rerolls use the boosted normalized probability");
                 grid.SetColor(converted.Id, EnemyColor.Red);
-                Check(grid.PlayerColorWeights()[boostedColor] == 1, "Bonus disappears immediately below threshold");
+                Check(grid.PlayerColorWeights()[boostedColor] == 2, "Bonus disappears immediately below threshold");
             });
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
@@ -352,10 +379,10 @@ namespace CandyCruisers.Editor
             }
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
             {
-                for (int i = 0; i < 20; i++) Add(grid, i < 4 ? EnemyColor.Green : i < 8 ? EnemyColor.Purple : EnemyColor.Red,
+                for (int i = 0; i < 36; i++) Add(grid, i < 7 ? EnemyColor.Green : i < 14 ? EnemyColor.Purple : EnemyColor.Red,
                     i % GridModel.Columns, i / GridModel.Columns);
                 var weights = grid.PlayerColorWeights();
-                Check(weights[EnemyColor.Green] == 28 && weights[EnemyColor.Purple] == 42 && weights[EnemyColor.Red] == 136,
+                Check(weights[EnemyColor.Green] == 56 && weights[EnemyColor.Purple] == 112 && weights[EnemyColor.Red] == 408,
                     "Green and Purple independently receive one 75 percent bonus without compounding");
             });
             Debug.Log("Green/Purple population checks passed: below/exact/above 18 percent, independent bonuses, rerolls and eligibility.");

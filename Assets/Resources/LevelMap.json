@@ -240,10 +240,10 @@
             "Green"
           ],
           "initialFleet": [
-            "g0g0g"
+            "g0gg0g"
           ],
           "lineSpawns": [
-            "g0g0g"
+            "g0gg0g"
           ]
         },
         {
@@ -252,12 +252,12 @@
             "Green"
           ],
           "initialFleet": [
-            "0gbgb0",
-            "0bgbg0"
+            "bgbgbg",
+            "bgbgbg"
           ],
           "lineSpawns": [
-            "0gbgb0",
-            "0bgbg0"
+            "gbgbgb",
+            "gbgbgb"
           ]
         },
         {
@@ -266,12 +266,12 @@
             "Green"
           ],
           "initialFleet": [
-            "0grgr0",
-            "0rgrg0"
+            "rgrgrg",
+            "rgrgrg"
           ],
           "lineSpawns": [
-            "0grgr0",
-            "0rgrg0"
+            "grgrgr",
+            "rgrgrg"
           ]
         },
         {
@@ -281,12 +281,12 @@
             "Green"
           ],
           "initialFleet": [
-            "rgrgr",
-            "gbgbg"
+            "rgrgrg",
+            "gbgbgb"
           ],
           "lineSpawns": [
-            "rrrrr",
-            "bbbbb"
+            "rrrrrr",
+            "bbbbbb"
           ]
         },
         {
@@ -313,7 +313,7 @@
             "Green"
           ],
           "initialFleet": [
-            "brggrb",
+            "grggrg",
             "brggrb",
             "rrbbrr"
           ],
@@ -334,64 +334,85 @@
             "Red",
             "Blue",
             "Green",
-            "Purple"
+            "Purple",
+            "Yellow"
           ],
           "initialFleet": [
-            "11223",
-            "34411",
-            "22334",
-            "41122",
-            "33441"
+            "*****",
+            "*****",
+            "*****"
           ],
-          "lineSpawns": []
+          "lineSpawns": [
+            "*****"
+          ]
         },
         {
           "possibleColors": [
             "Red",
             "Blue",
             "Green",
-            "Purple"
+            "Purple",
+            "Yellow"
           ],
           "initialFleet": [
-            "22334",
-            "41122",
-            "33441",
-            "12233",
-            "11223"
+            "*****",
+            "*****",
+            "*****"
           ],
-          "lineSpawns": []
+          "lineSpawns": [
+            "*****"
+          ]
         },
         {
           "possibleColors": [
             "Red",
             "Blue",
             "Green",
-            "Purple"
+            "Purple",
+            "Yellow"
           ],
           "initialFleet": [
-            "11223",
-            "34411",
-            "22334",
-            "41122",
-            "33441"
+            "*****",
+            "*****",
+            "*****"
           ],
-          "lineSpawns": []
+          "lineSpawns": [
+            "*****"
+          ]
         },
         {
           "possibleColors": [
             "Red",
             "Blue",
             "Green",
-            "Purple"
+            "Purple",
+            "Yellow"
           ],
           "initialFleet": [
-            "22334",
-            "41122",
-            "33441",
-            "12233",
-            "11223"
+            "*****",
+            "*****",
+            "*****"
           ],
-          "lineSpawns": []
+          "lineSpawns": [
+            "*****"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "*****",
+            "*****",
+            "*****"
+          ],
+          "lineSpawns": [
+            "*****"
+          ]
         }
       ]
     },
@@ -414,9 +435,96 @@
             "******"
           ],
           "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
             "******",
             "******",
             "******",
+            "******"
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******"
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******"
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******"
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******"
+          ],
+          "lineSpawns": [
             "******"
           ]
         }
@@ -432,108 +540,21 @@
             "Blue",
             "Green",
             "Purple",
-            "Yellow"
+            "Yellow",
+            "Orange"
           ],
           "initialFleet": [
-            "112233",
-            "344555",
-            "223344",
-            "455111"
+            "******",
+            "******",
+            "******",
+            "******",
+            "******"
 
           ],
           "lineSpawns": [
-            "112233",
-            "344555",
-            "223344",
-            "455111",
-            "334455",
-            "511222"
+            "******"
           ]
         },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue",
-            "Green",
-            "Purple",
-            "Yellow"
-          ],
-          "initialFleet": [
-            "223344",
-            "455111",
-            "334455",
-            "511222"
-          ],
-          "lineSpawns": [
-            "112233",
-            "344555",
-            "223344",
-            "455111",
-            "334455",
-            "511222"
-          ]
-        },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue",
-            "Green",
-            "Purple",
-            "Yellow"
-          ],
-          "initialFleet": [
-            "112233",
-            "344555",
-            "223344",
-            "455111"
-          ],
-          "lineSpawns": [
-            "112233",
-            "344555",
-            "223344",
-            "455111",
-            "334455",
-            "511222"
-          ]
-        }
-        
-      ]
-    },
-    "8": {
-      "backgroundImage": "",
-      "possibleSoundtrackTracks": [],
-      "fleets": [
-        {
-          "possibleColors": [
-            "Red",
-            "Blue",
-            "Green",
-            "Purple",
-            "Yellow"
-          ],
-          "initialFleet": [
-            "112233",
-            "344555",
-            "223344",
-            "455111",
-            "334455",
-            "511222"
-          ],
-          "lineSpawns": [
-            "112233",
-            "344555",
-            "223344",
-            "455111",
-            "334455",
-            "511222"
-          ]
-        }
-      ]
-    },
-    "9": {
-      "backgroundImage": "",
-      "possibleSoundtrackTracks": [],
-      "fleets": [
         {
           "possibleColors": [
             "Red",
@@ -544,21 +565,60 @@
             "Orange"
           ],
           "initialFleet": [
-            "o11223",
-            "334455",
-            "221133",
-            "445522",
-            "113344",
-            "552211"
+            "******",
+            "******",
+            "******",
+            "******",
+            "******"
+
           ],
           "lineSpawns": [
-            "334455",
-            "221133",
-            "445522",
-            "113344",
-            "552211"
+            "******"
           ]
-        }   
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow",
+            "Orange"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******",
+            "******"
+
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        },
+        {
+          "possibleColors": [
+            "Red",
+            "Blue",
+            "Green",
+            "Purple",
+            "Yellow",
+            "Orange"
+          ],
+          "initialFleet": [
+            "******",
+            "******",
+            "******",
+            "******",
+            "******"
+
+          ],
+          "lineSpawns": [
+            "******"
+          ]
+        }
+        
       ]
     }
   }

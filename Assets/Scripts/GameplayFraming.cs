@@ -273,18 +273,14 @@ namespace CandyCruisers
                 var shader = Resources.Load<Shader>("StarColors");
                 if (shader != null) starColorMaterial = new Material(shader);
             }
-            if (starColorMaterial != null)
+            if (starColorMaterial != null) starBackground.sharedMaterial = starColorMaterial;
+            if (magic)
             {
-                starBackground.sharedMaterial = starColorMaterial;
-                starColorMaterial.SetFloat("_Magic", magic ? 1 : 0);
-                var music = player != null ? player.Music : null;
+                // Cycle throughout each beat pulse, using the character's live color clock.
+                var music = player.Music;
                 float phase = music != null && music.InGameplayRun ? Mathf.Max(0, music.BeatPosition) * 4 : Time.time * 10;
-                starColorMaterial.SetFloat("_Phase", phase);
-                var palette = new Vector4[6];
-                for (int i = 0; i < palette.Length; i++) palette[i] = EnemyPalette.Get(EnemyPalette.CycleColor(i));
-                starColorMaterial.SetVectorArray("_Palette", palette);
+                color = EnemyPalette.Get(EnemyPalette.CycleColor(Mathf.FloorToInt(phase)));
             }
-            if (magic) color = Color.white;
             color = Color.Lerp(Color.black, color, Mathf.SmoothStep(0, 1, fade));
             color = Color.Lerp(color, Color.white, .22f * pulse);
             color.a *= Mathf.Lerp(.72f, 1f, pulse);

@@ -74,13 +74,15 @@ namespace CandyCruisers
         {
             var weights = new Dictionary<EnemyColor, int>();
             var eligible = new HashSet<EnemyColor>();
+            var occupiedRows = new HashSet<int>();
             var barrier = SpecialBlueBarrierRows();
             for (int column = 0; column < GridModel.Columns; column++)
                 for (int row = 0; row < GridModel.Rows; row++)
                 {
-                    if (allowedColumns != null && (column >= allowedColumns.Length || !allowedColumns[column])) continue;
                     var enemy = Model.At(column, row);
                     if (enemy == null) continue;
+                    occupiedRows.Add(row);
+                    if (allowedColumns != null && (column >= allowedColumns.Length || !allowedColumns[column])) continue;
                     int weight = row + 1;
                     if (barrier != null && enemy.Color == EnemyColor.Blue) weight *= 2;
                     weights.TryGetValue(enemy.Color, out int previous);
@@ -92,8 +94,8 @@ namespace CandyCruisers
                 }
             foreach (var color in new List<EnemyColor>(weights.Keys))
                 if (!eligible.Contains(color)) weights.Remove(color);
-            bool boostGreen = weights.ContainsKey(EnemyColor.Green) && Fleet.ColorCount(EnemyColor.Green) * 100 > Fleet.Count * 18;
-            bool boostPurple = weights.ContainsKey(EnemyColor.Purple) && Fleet.ColorCount(EnemyColor.Purple) * 100 > Fleet.Count * 18;
+            bool boostGreen = occupiedRows.Count >= 6 && weights.ContainsKey(EnemyColor.Green) && Fleet.ColorCount(EnemyColor.Green) * 100 > Fleet.Count * 18;
+            bool boostPurple = occupiedRows.Count >= 6 && weights.ContainsKey(EnemyColor.Purple) && Fleet.ColorCount(EnemyColor.Purple) * 100 > Fleet.Count * 18;
             if (boostGreen || boostPurple)
             {
                 // Scale once so qualifying colors each receive exactly 1.75x their original weight.
