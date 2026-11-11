@@ -6,14 +6,15 @@ namespace CandyCruisers
     public sealed class EnemyGridMovement : MonoBehaviour
     {
         [SerializeField, Min(0f)] private float speed = 0.3f;
-        [SerializeField] private bool useGreenDashes;
+        [UnityEngine.Serialization.FormerlySerializedAs("useGreenDashes")]
+        [SerializeField] private bool useLegacyMovement;
         [SerializeField, Min(.001f)] private float stepDistance = .15f;
         private double bankedDistance;
         private readonly System.Collections.Generic.List<int> greenOrder = new();
         private readonly System.Collections.Generic.HashSet<int> liveGreens = new();
         private readonly System.Collections.Generic.HashSet<int> pulsedGreens = new();
         public event System.Action<int> GreenPulsed;
-        public bool UseGreenDashes { get => useGreenDashes; set => useGreenDashes = value; }
+        public bool UseLegacyMovement { get => useLegacyMovement; set => useLegacyMovement = value; }
         private Vector3 origin;
         private bool initialized;
         private EnemyGrid grid;
@@ -24,7 +25,7 @@ namespace CandyCruisers
         private int lastMovementBeat = int.MinValue;
         public int Direction { get; private set; } = 1;
         public float CurrentSpeed => speed * CombatBalance.FleetSpeedMultiplier(GetComponent<GameSession>()?.Progress.Level ?? 1)
-            * (useGreenDashes ? 1 : .1f * GetComponent<EnemyGrid>().RegularGreenCount);
+            * (useLegacyMovement ? 1 : .1f * GetComponent<EnemyGrid>().RegularGreenCount);
         public event System.Action SweepEnded;
 
         private void Awake() => Initialize();
@@ -57,7 +58,7 @@ namespace CandyCruisers
         {
             Initialize();
             if (!enabled || speed <= 0 || seconds <= 0 || double.IsNaN(seconds) || double.IsInfinity(seconds)) return;
-            if (!useGreenDashes) { TickGreenBeatMovement(seconds); return; }
+            if (!useLegacyMovement) { TickGreenBeatMovement(seconds); return; }
             TickLegacyMovement(seconds);
         }
 
@@ -182,7 +183,8 @@ namespace CandyCruisers
             int next = greenOrder[0];
             greenOrder.RemoveAt(0);
             pulsedGreens.Add(next);
-            grid.View(next)?.GetComponent<EnemyPresentation>()?.MovementPulse(Direction);
+            float untilNextBeat = CurrentBeatDuration * (float)(System.Math.Floor(beatPosition) + 1 - beatPosition);
+            grid.View(next)?.GetComponent<EnemyPresentation>()?.MovementPulse(Direction, untilNextBeat);
             GreenPulsed?.Invoke(next);
         }
 
@@ -190,7 +192,7 @@ namespace CandyCruisers
         {
             Initialize();
             if (!enabled || remaining < 0 || double.IsNaN(remaining) || double.IsInfinity(remaining)) return;
-            if (!useGreenDashes && grid.RegularGreenCount == 0) return;
+            if (!useLegacyMovement && grid.RegularGreenCount == 0) return;
             int version = resetVersion;
             while (remaining >= 0 && enabled && version == resetVersion)
             {
@@ -211,7 +213,7 @@ namespace CandyCruisers
                 if (remaining <= 0) return;
                 // A callback may spawn, reindex, end the run, or reset the fleet.
                 // Re-read occupancy before spending the frame's remaining movement.
-                if (!useGreenDashes && grid.RegularGreenCount == 0) return;
+                if (!useLegacyMovement && grid.RegularGreenCount == 0) return;
             }
         }
 

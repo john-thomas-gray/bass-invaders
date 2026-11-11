@@ -361,7 +361,7 @@ namespace CandyCruisers.Editor
                 Add(grid, EnemyColor.Green, 1, 0);
                 var ability = green.GetComponent<EnemyAbilities>();
                 ability.Tick(100);
-                Check(!ability.IsCasting && !ability.Warning && !movement.UseGreenDashes && grid.transform.position == Vector3.zero,
+                Check(!ability.IsCasting && !ability.Warning && !movement.UseLegacyMovement && grid.transform.position == Vector3.zero,
                     "Ordinary Greens remain count-based without warnings or dashes");
                 Add(grid, EnemyColor.Green, 2, 0);
                 grid.RefreshSpecials();
@@ -376,7 +376,7 @@ namespace CandyCruisers.Editor
                 ability.Suspended = false;
                 ability.Tick(.6f);
                 ability.Tick(.18f);
-                Check(grid.transform.position == Vector3.zero && ability.GreenTempoActive && !movement.UseGreenDashes,
+                Check(grid.transform.position == Vector3.zero && ability.GreenTempoActive && !movement.UseLegacyMovement,
                     "Tier-two Green raises tempo once without moving the fleet");
                 grid.SetColor(green.Id, EnemyColor.Red);
                 ability.Tick(0);
@@ -433,7 +433,7 @@ namespace CandyCruisers.Editor
                 ability.Tick(.25f);
                 Check(!lines[0].colorGradient.colorKeys.Select(key => key.color).SequenceEqual(before),
                     "Neighbor color visibly travels through the tendrils");
-                ability.Tick(EnemyAbilities.ImitationSeconds - .75f);
+                ability.Tick(EnemyAbilities.DefaultImitationSeconds - .75f);
                 Check(!ability.IsTransforming && ability.IsDisguised && lines.All(line => !line.enabled),
                     "Tendrils end at the normal imitation duration while the disguise remains");
                 ability.RevealDisguise(EnemyColor.Red);
@@ -484,15 +484,6 @@ namespace CandyCruisers.Editor
                     var presentation = green.GetComponent<EnemyPresentation>();
                     var body = green.Visuals.Body.transform;
                     var resting = body.localRotation;
-                    presentation.DashGreen(1);
-                    presentation.Tick(.01f, EnemyColor.Green, 0);
-                    var trails = green.GetComponentsInChildren<LineRenderer>().Where(line => line.name.StartsWith("Green dash trail")).ToArray();
-                    Check(trails.Length == 5 && trails.All(line => line.enabled &&
-                        line.GetPosition(2).x < line.GetPosition(0).x && line.endColor.a == 0),
-                        "Green dash streaks trail opposite rightward travel and fade along their length");
-                    presentation.SetDashDirection(-.1f); presentation.Tick(.01f, EnemyColor.Green, 0);
-                    Check(trails.All(line => line.GetPosition(2).x > line.GetPosition(0).x),
-                        "Dash trails follow a reversal in actual movement");
                     presentation.SpinGreen();
                     float elapsed = 0;
                     while (elapsed < EnemyPresentation.GreenSpinSeconds)
@@ -502,7 +493,6 @@ namespace CandyCruisers.Editor
                     }
                     Check(Quaternion.Angle(body.localRotation, resting) < .01f, "Spin completes with short or long frames");
                     presentation.Tick(1, EnemyColor.Green, 0);
-                    Check(trails.All(line => !line.enabled), "Dash streaks clean up after fading");
                     presentation.SpinGreen();
                     presentation.Tick(.05f, EnemyColor.Green, 0);
                     var ability = green.GetComponent<EnemyAbilities>();
@@ -513,7 +503,7 @@ namespace CandyCruisers.Editor
                 });
             Fixture((grid, player, tongue) =>
             {
-                grid.GetComponent<EnemyGridMovement>().UseGreenDashes = true;
+                grid.GetComponent<EnemyGridMovement>().UseLegacyMovement = true;
                 var green = Add(grid, EnemyColor.Green, 0, 0);
                 var ability = green.GetComponent<EnemyAbilities>();
                 ability.Tick(ability.CooldownRemaining);

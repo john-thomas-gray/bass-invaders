@@ -6,8 +6,8 @@ namespace CandyCruisers
     public sealed class EnemyGrid : MonoBehaviour
     {
         [SerializeField, Min(0.01f)] private float spacing = 0.75f;
-        [SerializeField, Min(0.01f)] private float retreatStepSeconds = 0.15f;
-        private double retreatElapsed;
+        private readonly AbilityBeatClock retreatClock = new AbilityBeatClock();
+        private int lastRetreatBeat;
         [SerializeField] private GameObject missilePrefab;
         [SerializeField] private Sprite shieldSprite;
         public void ConfigureAbilities(GameObject missile, Sprite shield)
@@ -189,11 +189,14 @@ namespace CandyCruisers
 
         public void TickRetreat(float seconds)
         {
-            retreatElapsed += Mathf.Max(0, seconds);
-            double interval = Mathf.Max(0.01f, retreatStepSeconds);
-            while (retreatElapsed >= interval)
+            var music = GetComponent<GameplayMusicPlayer>();
+            if (music != null && (music.PreviewTime.HasValue || Application.isPlaying && music.Source.clip != null))
+                retreatClock.Advance(seconds, music.BeatPosition, music.Source.clip != null ? music.Source.clip.GetInstanceID() : 0);
+            else retreatClock.Advance(seconds);
+            int currentBeat = Mathf.FloorToInt(retreatClock.Position + .00001f);
+            while (lastRetreatBeat < currentBeat)
             {
-                retreatElapsed -= interval;
+                lastRetreatBeat++;
                 var moved = Model.RetreatStep();
                 foreach (var cell in moved)
                 {
@@ -204,7 +207,7 @@ namespace CandyCruisers
                 if (moved.Count > 0) ExplodeTouchingOranges();
                 if (moved.Count == 0)
                 {
-                    retreatElapsed %= interval;
+                    lastRetreatBeat = currentBeat;
                     break;
                 }
             }
@@ -363,7 +366,7 @@ namespace CandyCruisers
             {
                 if (!views.TryGetValue(clearedId, out var enemy)) continue;
                 removedColors.Add(enemy.Color);
-                if (enemy.Color == EnemyColor.Green)
+                if (enemy.Color == EnemyColor.Green && enemy.IsSpecial)
                     enemy.GetComponent<EnemyPresentation>()?.TempoDown();
                 int animationDepth = depths[clearedId];
                 var match = enemy.Visuals.Match(enemy.Color, animationDepth, multipliers[clearedId]);

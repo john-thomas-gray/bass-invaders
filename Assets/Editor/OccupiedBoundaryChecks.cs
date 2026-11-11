@@ -123,7 +123,7 @@ namespace CandyCruisers.Editor
         private static void WithFleet(Action<EnemyGrid, EnemyGridMovement> test)
         {
             var root = new GameObject("Occupied boundary fixture", typeof(EnemyGrid), typeof(EnemyGridMovement));
-            try { root.GetComponent<EnemyGridMovement>().UseGreenDashes = true; test(root.GetComponent<EnemyGrid>(), root.GetComponent<EnemyGridMovement>()); }
+            try { root.GetComponent<EnemyGridMovement>().UseLegacyMovement = true; test(root.GetComponent<EnemyGrid>(), root.GetComponent<EnemyGridMovement>()); }
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
         private static void Near(float value, float expected, string message) => Check(Mathf.Abs(value - expected) < 0.001f, message);

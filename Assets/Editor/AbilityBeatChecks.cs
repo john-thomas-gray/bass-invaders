@@ -37,8 +37,109 @@ namespace CandyCruisers.Editor
                 Check(CombatBalance.CooldownBeats(color, 50, special).y <= beats.y,
                     "Later levels retain faster maximum cooldowns");
             }
+            CheckSharedWarnings();
+            CheckYellowBeats();
+            CheckRetreatBeats();
             if (Application.isPlaying) CheckAudioDrivenRed();
             Debug.Log("Ability beat checks passed: phase alignment, pause, track changes, seeks and cooldown ranges.");
+        }
+        private static void CheckSharedWarnings()
+        {
+            foreach (float tempo in new[] { 60f, 180f })
+            foreach (EnemyColor color in Enum.GetValues(typeof(EnemyColor)))
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                music.PreviewTime = 0;
+                music.PreviewTempo = tempo;
+                var actor = ProgressionChecks.Add(grid, color, 2, 0);
+                if (color == EnemyColor.Green)
+                {
+                    ProgressionChecks.Add(grid, color, 1, 0);
+                    ProgressionChecks.Add(grid, color, 3, 0);
+                    grid.RefreshSpecials();
+                }
+                else ProgressionChecks.Add(grid, EnemyColor.Red, 3, 0);
+                var ability = actor.GetComponent<EnemyAbilities>();
+                ability.Tick(0);
+                float beatSeconds = 60 / tempo;
+                bool cast = color == EnemyColor.Green || color == EnemyColor.Purple || color == EnemyColor.Orange;
+                float trigger = ability.CooldownRemaining / beatSeconds + (cast ? 1 : 0);
+                music.PreviewTime = (trigger - 1.01f) * beatSeconds;
+                ability.Tick(0);
+                Check(!ability.Warning, color + " does not warn more than one beat early at " + tempo);
+                music.PreviewTime = (trigger - 1) * beatSeconds;
+                ability.Tick(0);
+                Check(ability.Warning, color + " warns on the preceding beat at " + tempo);
+                ability.Tick(100);
+                Check(ability.Warning, color + " warning follows paused soundtrack rather than wall time");
+                music.PreviewTime = (trigger - .01f) * beatSeconds;
+                ability.Tick(0);
+                Check(ability.Warning, color + " warning lasts until activation");
+                music.PreviewTime = trigger * beatSeconds;
+                ability.Tick(0);
+                Check(!ability.Warning, color + " warning ends on activation");
+            });
+        }
+        private static void CheckYellowBeats()
+        {
+            foreach (bool special in new[] { false, true })
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                music.PreviewTime = 0;
+                music.PreviewTempo = 60;
+                var yellow = ProgressionChecks.Add(grid, EnemyColor.Yellow, 2, 0);
+                var target = ProgressionChecks.Add(grid, EnemyColor.Red, 2, 1);
+                if (special)
+                {
+                    ProgressionChecks.Add(grid, EnemyColor.Yellow, 1, 0);
+                    ProgressionChecks.Add(grid, EnemyColor.Yellow, 3, 0);
+                    grid.RefreshSpecials();
+                }
+                var ability = yellow.GetComponent<EnemyAbilities>();
+                Check(ability.BeginImitation(target), "Yellow starts its two-beat transformation");
+                music.PreviewTime = 1;
+                ability.Tick(100);
+                Check(ability.IsTransforming, "One beat cannot complete Yellow despite a long frame");
+                music.PreviewTempo = 180;
+                music.PreviewTime = 1f / 3;
+                ability.Tick(100);
+                Check(ability.IsTransforming, "Tempo changes and a paused soundtrack preserve remaining beats");
+                music.PreviewTime = 1.99f / 3;
+                ability.Tick(0);
+                Check(ability.IsTransforming, "Yellow remains transforming until its second beat");
+                music.PreviewTime = 2f / 3;
+                ability.Tick(0);
+                Check(!ability.IsTransforming && (special ? ability.IsDisguised : yellow.Color == EnemyColor.Red),
+                    "Regular conversion and special disguise finish exactly at two beats");
+            });
+        }
+        private static void CheckRetreatBeats()
+        {
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                music.PreviewTempo = 60;
+                music.PreviewTime = .25f;
+                var enemy = ProgressionChecks.Add(grid, EnemyColor.Red, 2, 8);
+                grid.TickRetreat(0);
+                music.PreviewTime = .99f;
+                grid.TickRetreat(100);
+                Check(enemy.Row == 8, "Retreat waits for the next soundtrack beat");
+                music.PreviewTime = 1;
+                grid.TickRetreat(0);
+                Check(enemy.Row == 7, "Retreat moves one space on a beat");
+                grid.TickRetreat(100);
+                Check(enemy.Row == 7, "Paused soundtrack cannot repeat a retreat step");
+                music.PreviewTempo = 180;
+                music.PreviewTime = 2f / 3;
+                grid.TickRetreat(0);
+                Check(enemy.Row == 6, "Retreat follows a faster tempo");
+                music.PreviewTime = 4f / 3;
+                grid.TickRetreat(0);
+                Check(enemy.Row == 4, "A long frame catches up exactly one space per missed beat");
+            });
         }
         private static void CheckAudioDrivenRed()
         {

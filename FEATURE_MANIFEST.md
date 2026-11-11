@@ -870,6 +870,13 @@ reference for individual rules and original limitations.
 ## Green Tempo And Rhythm Arrows
 - [x] Exclude special Greens from ordinary movement counts and pulse rotation.
 - [x] Raise tempo by 3% per special only when its ability completes; allow one activation per special.
-- [x] Share a chamfered dance-pad arrow with black outline, blue gradient and white insets; keep activated specials' up arrows overhead.
-- [x] Ease removed boosts down over one beat and animate detached down arrows when Greens are cleared.
+- [x] Share a chamfered dance-pad arrow with black outline, green gradient and white insets; keep activated specials' up arrows centered on their enemies.
+- [x] Ease removed boosts down over one beat and animate detached down arrows when special Greens are cleared.
 - [x] Preserve pause behavior and validate desktop layouts and the native iPhone simulator.
+
+### Beat-based enemy actions
+
+- [x] Remove the regular Green dash ability and its trail visuals, preserving regular beat-pulse fleet movement.
+- [x] Retreat disconnected enemies one grid space per soundtrack beat.
+- [x] Use one shared warning window for scheduled abilities: the beat before activation.
+- [x] Run regular Yellow transformation and special Yellow disguise transition for two soundtrack beats.

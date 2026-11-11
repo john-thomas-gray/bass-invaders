@@ -51,7 +51,7 @@ namespace CandyCruisers.Editor
                     var enemy = obj.GetComponent<GridEnemy>();
                     enemy.Configure(EnemyColor.Blue, 2, 6);
                     grid.Register(enemy);
-                    for (float time = 0; time < 2; time += delta) grid.TickRetreat(delta);
+                    for (float time = 0; time < 4; time += delta) grid.TickRetreat(delta);
                     Check(enemy.Row == 0 && grid.Model.At(2, 0).Id == enemy.Id && grid.Model.Count == 1,
                         "Timed retreat preserves view and model");
                     Check(Vector3.Distance(enemy.transform.localPosition, grid.CellPosition(2, 0)) < 0.0001f,

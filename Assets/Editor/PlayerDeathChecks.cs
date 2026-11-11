@@ -184,7 +184,7 @@ namespace CandyCruisers.Editor
                 {
                     var ability = yellow.GetComponent<EnemyAbilities>();
                     Check(ability.BeginImitation(red), "Last Yellow starts transformation");
-                    ability.Tick(EnemyAbilities.ImitationSeconds);
+                    ability.Tick(EnemyAbilities.DefaultImitationSeconds);
                 }
                 else
                 {

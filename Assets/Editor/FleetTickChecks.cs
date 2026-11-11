@@ -91,28 +91,48 @@ namespace CandyCruisers.Editor
                 Check(layers.Length == 4 && layers.All(layer => layer.enabled) &&
                     layers[0].GetComponent<MeshFilter>().sharedMesh == layers[2].GetComponent<MeshFilter>().sharedMesh &&
                     layers[1].GetComponent<MeshFilter>().sharedMesh == layers[3].GetComponent<MeshFilter>().sharedMesh,
-                    "Dance arrow shares silhouette and gradient meshes across its black, blue and white layers");
-                Check(layers[0].bounds.size.x > green.Visuals.Body.bounds.size.x * 1.5f &&
+                    "Dance arrow shares silhouette and gradient meshes across its black, green and white layers");
+                float enemySize = Mathf.Max(green.Visuals.Body.bounds.size.x, green.Visuals.Body.bounds.size.y);
+                Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - .3f) < .001f &&
                     arrow.TransformDirection(Vector3.right).x > .99f,
-                    "The arrow is larger than the Green and initially points right");
+                    "Regular arrow begins at 30 percent of the enemy size and points right");
+                Check(Vector3.Distance(arrow.position, green.Visuals.Body.bounds.center) < .0001f,
+                    "Regular arrow starts at the enemy center");
+                Check(layers[1].GetComponent<MeshFilter>().sharedMesh.colors.All(color => color.g > color.r && color.g > color.b),
+                    "Both ends of the arrow gradient are green");
                 Check(!green.GetComponentsInChildren<LineRenderer>().Any(line => line.name.StartsWith("Green surge")),
                     "The movement arrow replaces every electrical branch");
                 Vector3 point = arrow.position, scale = arrow.lossyScale;
                 visual.Tick(.06f, EnemyColor.Green, 0);
-                Check(arrow.position.x > point.x && arrow.lossyScale.x > scale.x,
-                    "The arrow pops larger and slides in the travel direction");
+                Check(arrow.position == point && arrow.lossyScale.x > scale.x,
+                    "The arrow grows while remaining centered on the enemy");
                 point = arrow.position; scale = arrow.lossyScale;
                 visual.Tick(0, EnemyColor.Green, 0);
                 Check(arrow.position == point && arrow.lossyScale == scale, "Pause holds the arrow pose");
                 visual.MovementPulse(-1);
                 Check(layers.All(layer => layer.enabled) && arrow.TransformDirection(Vector3.right).x < -.99f,
                     "Leftward movement flips the entire arrow silhouette");
-                visual.Tick(EnemyPresentation.MovementPulseSeconds - .05f, EnemyColor.Green, 0);
                 var tint = new MaterialPropertyBlock();
+                visual.Tick(visual.MovementPulseDuration * (.8f / 1.45f), EnemyColor.Green, 0);
                 layers[2].GetPropertyBlock(tint);
-                Check(tint.GetColor("_Color").a > 0 && tint.GetColor("_Color").a < .5f, "The arrow fades at the end of the pulse");
-                visual.Tick(EnemyPresentation.MovementPulseSeconds, EnemyColor.Green, 0);
-                Check(layers.All(layer => !layer.enabled), "The arrow disappears after the pulse");
+                Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - 1.1f) < .001f &&
+                    Mathf.Abs(tint.GetColor("_Color").a - 1) < .001f,
+                    "Regular arrow stays fully opaque through 110 percent size");
+                visual.Tick(visual.MovementPulseDuration * (.1625f / 1.45f), EnemyColor.Green, 0);
+                layers[2].GetPropertyBlock(tint);
+                Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - 1.2625f) < .001f &&
+                    Mathf.Abs(tint.GetColor("_Color").a - .84375f) < .001f,
+                    "Regular arrow eases out slowly at the start of its fade");
+                visual.Tick(visual.MovementPulseDuration * (.1625f / 1.45f), EnemyColor.Green, 0);
+                layers[2].GetPropertyBlock(tint);
+                Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - 1.425f) < .001f &&
+                    Mathf.Abs(tint.GetColor("_Color").a - .5f) < .001f,
+                    "Regular arrow is half transparent at 142.5 percent size");
+                visual.Tick(visual.MovementPulseDuration, EnemyColor.Green, 0);
+                layers[2].GetPropertyBlock(tint);
+                Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - 1.75f) < .001f &&
+                    tint.GetColor("_Color").a < .001f && layers.All(layer => !layer.enabled),
+                    "Regular arrow finishes at 175 percent size with zero opacity");
                 Check(green.Visuals.Body.color == resting, "Pulse returns to original color without changing geometry");
                 visual.MovementPulse();
                 visual.Clear();
@@ -144,16 +164,58 @@ namespace CandyCruisers.Editor
                 movement.AdvanceDistance(PlayerMovement.HalfWidth - right);
                 visual.Tick(0, EnemyColor.Green, 0);
                 Check(movement.Direction == -1 && arrow.TransformDirection(Vector3.right).x < -.99f &&
-                    layers[0].bounds.max.x < PlayerMovement.HalfWidth,
-                    "A right-edge reversal turns the active arrow left and keeps its outline inside the field");
+                    Vector3.Distance(arrow.position, green.Visuals.Body.bounds.center) < .0001f,
+                    "A right-edge reversal turns the centered arrow left");
                 grid.OccupiedHorizontalBounds(out float left, out _);
                 movement.AdvanceDistance(left + PlayerMovement.HalfWidth);
                 visual.Tick(0, EnemyColor.Green, 0);
                 Check(movement.Direction == 1 && arrow.TransformDirection(Vector3.right).x > .99f &&
-                    layers[0].bounds.min.x > -PlayerMovement.HalfWidth,
-                    "A left-edge reversal turns the active arrow right without clipping");
+                    Vector3.Distance(arrow.position, green.Visuals.Body.bounds.center) < .0001f,
+                    "A left-edge reversal turns the centered arrow right");
                 Check(green.HitBounds.size == hitBounds.size && UnityEngine.Random.state.Equals(random),
                     "Arrow animation changes neither collision size nor gameplay randomness");
+            });
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var green = ProgressionChecks.Add(grid, EnemyColor.Green, 0, 0);
+                var visual = green.GetComponent<EnemyPresentation>();
+                var music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                foreach (float tempo in new[] { 75f, 115.03f, 180f })
+                foreach (int frames in new[] { 30, 60, 120 })
+                {
+                    music.PreviewTempo = tempo;
+                    float beat = 60f / tempo;
+                    float start = beat * 2.25f, end = beat * 3;
+                    music.PreviewTime = start;
+                    visual.MovementPulse();
+                    var layers = green.GetComponentsInChildren<MeshRenderer>();
+                    Check(Mathf.Abs(visual.MovementPulseDuration - beat * .75f) < .0001f,
+                        "A late pulse uses only the time until the next beat");
+                    var scale = layers[0].transform.parent.lossyScale;
+                    visual.Tick(100, EnemyColor.Green, 0);
+                    Check(layers[0].transform.parent.lossyScale == scale,
+                        "Paused soundtrack holds arrow growth despite a large local delta");
+                    for (int frame = 1; frame < frames; frame++)
+                    {
+                        music.PreviewTime = Mathf.Lerp(start, end, (float)frame / frames);
+                        visual.Tick(1f / frames, EnemyColor.Green, 0);
+                        Check(layers.All(layer => layer.enabled), "Arrow remains active before the next beat");
+                    }
+                    music.PreviewTime = end;
+                    visual.Tick(0, EnemyColor.Green, 0);
+                    var tint = new MaterialPropertyBlock();
+                    layers[0].GetPropertyBlock(tint);
+                    float size = Mathf.Max(green.Visuals.Body.bounds.size.x, green.Visuals.Body.bounds.size.y);
+                    Check(layers.All(layer => !layer.enabled) && tint.GetColor("_Color").a == 0 &&
+                        Mathf.Abs(layers[0].bounds.size.x / size - 1.75f) < .001f,
+                        "Growth and fade complete together on the next beat at every tempo and frame rate");
+                }
+                music.PreviewTime = .2f;
+                visual.MovementPulse();
+                music.PreviewTime = null;
+                visual.Tick(visual.MovementPulseDuration, EnemyColor.Green, 0);
+                Check(green.GetComponentsInChildren<MeshRenderer>().All(layer => !layer.enabled),
+                    "Clock changes cannot strand an arrow");
             });
             Debug.Log("Fleet tick checks passed: counts two and four, half-speed travel, Green rotation, removals, pause, directional rhythm arrows, reversals, fade, frame timing and edge framing.");
         }

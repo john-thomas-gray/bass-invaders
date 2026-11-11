@@ -9,9 +9,6 @@ namespace CandyCruisers
         private SpriteRenderer body;
         private SpriteRenderer imitation;
         private LineRenderer tendril, portal, streak;
-        private LineRenderer[] dashLines, feedingTendrils;
-        private float dashRemaining;
-        private int dashDirection;
         private bool feedingImitation;
         private float phaseRemaining, shiftRemaining, clock;
         public const float SpawnSeconds = .8f;
@@ -50,6 +47,7 @@ namespace CandyCruisers
         private int shiftDirection;
         private GridEnemy target;
         private Vector3 targetPosition;
+        private LineRenderer[] feedingTendrils;
         private float imitationRemaining;
         private Sprite oldSprite;
         private EnemyColor imitationColor;
@@ -61,7 +59,19 @@ namespace CandyCruisers
         public bool YellowRevealReturnActive => yellowRevealSprite != null &&
             yellowRevealAge + .0001f < yellowRevealArrivalSeconds + yellowRevealReturnSeconds;
         private float movementPulseRemaining;
+        private float movementPulseDuration = MovementPulseSeconds;
+        public float MovementPulseDuration => movementPulseDuration;
+        private GameplayMusicPlayer movementPulseMusic;
+        private AudioClip movementPulseClip;
+        private bool movementPulsePreview;
+        private float movementPulseEndSeconds, movementPulseMusicSeconds;
         private bool tempoArrow;
+        private bool greenCloakActive, greenCloakPermanent, cloakAlphaApplied;
+        private float greenCloakElapsed, greenCloakOffbeatDelay, greenCloakFadeSeconds, uncloakedBodyAlpha;
+        private GameplayMusicPlayer greenCloakMusic;
+        private AudioClip greenCloakClip;
+        private bool greenCloakPreview;
+        private float greenCloakStartSeconds, greenCloakMusicSeconds;
         public const float MovementPulseSeconds = .38f;
         private Transform movementArrow;
         private MeshRenderer[] movementArrowLayers;
@@ -86,21 +96,39 @@ namespace CandyCruisers
             summonFlashRemaining = SummonFlashSeconds;
             Tick(0, GetComponent<GridEnemy>().Color, 0);
         }
-        public void MovementPulse(int direction = 1)
+        public void MovementPulse(int direction = 1, float? fallbackSecondsToNextBeat = null)
         {
             if (body == null) return;
             EnsureMovementArrow();
             movementArrowDirection = direction < 0 ? -1 : 1;
             arrowFleetDirection = arrowFleet != null ? arrowFleet.Direction : movementArrowDirection;
-            movementPulseRemaining = MovementPulseSeconds;
+            var music = GetComponentInParent<GameplayMusicPlayer>();
+            movementPulseMusic = music != null && music.BeatClockRunning ? music : null;
+            movementPulseDuration = Mathf.Max(.0001f, fallbackSecondsToNextBeat ?? music?.BeatDuration ?? AbilityBeatClock.DefaultBeatSeconds);
+            if (movementPulseMusic != null)
+            {
+                movementPulseClip = music.Source.clip;
+                movementPulsePreview = music.PreviewTime.HasValue;
+                movementPulseMusicSeconds = music.PlaybackSeconds;
+                movementPulseEndSeconds = music.SecondsAtBeat(Mathf.Floor(music.BeatPosition) + 1);
+                movementPulseDuration = Mathf.Max(.0001f, movementPulseEndSeconds - movementPulseMusicSeconds);
+            }
+            movementPulseRemaining = movementPulseDuration;
+            BeginGreenCloak(false, movementPulseDuration);
             Tick(0, EnemyColor.Green, 0);
         }
         public void TempoUp()
         {
             EnsureMovementArrow();
-            if (!tempoArrow) movementPulseRemaining = MovementPulseSeconds;
+            if (!tempoArrow)
+            {
+                movementPulseMusic = null;
+                movementPulseRemaining = movementPulseDuration = MovementPulseSeconds;
+                BeginGreenCloak(true);
+            }
             tempoArrow = true;
             PresentMovementArrow(EnemyColor.Green);
+            ApplyGreenCloak(EnemyColor.Green);
         }
 
         public void TempoDown()
@@ -125,18 +153,6 @@ namespace CandyCruisers
             if (greenSpinRemaining <= 0) greenRestingRotation = body.transform.localRotation;
             greenSpinRemaining = GreenSpinSeconds;
         }
-        public void DashGreen(int direction)
-        {
-            SpinGreen();
-            dashDirection = direction < 0 ? -1 : 1;
-            dashRemaining = .42f;
-            if (dashLines != null) return;
-            dashLines = new LineRenderer[5];
-            for (int i = 0; i < dashLines.Length; i++)
-                dashLines[i] = Line("Green dash trail " + i, 3, .035f);
-        }
-        public void SetDashDirection(float distance)
-        { if (Mathf.Abs(distance) > .000001f) dashDirection = distance < 0 ? -1 : 1; }
         public void AimRed(Vector3 direction, bool aiming, float seconds, bool firing = false)
         {
             if (body == null || !aiming && !aimingApplied) return;
@@ -158,10 +174,14 @@ namespace CandyCruisers
             target = neighbor;
             targetPosition = neighbor.transform.position;
             oldSprite = previousSprite;
-            imitationRemaining = EnemyAbilities.ImitationSeconds;
+            imitationRemaining = EnemyAbilities.DefaultImitationSeconds;
             imitationColor = neighbor.Color;
             body.sprite = neighbor.Visuals.Body.sprite;
             if (feedingImitation) EnsureFeedingTendrils();
+        }
+        public void SetImitationProgress(float progress)
+        {
+            imitationRemaining = EnemyAbilities.DefaultImitationSeconds * (1 - Mathf.Clamp01(progress));
         }
         public void DetachImitation()
         {
@@ -237,6 +257,8 @@ namespace CandyCruisers
         public void Tick(float seconds, EnemyColor color, float warning)
         {
             if (body == null) return;
+            RestoreCloakAlpha();
+            TickGreenCloak(seconds);
             if (greenSpinRemaining > 0)
             {
                 greenSpinRemaining = Mathf.Max(0, greenSpinRemaining - Mathf.Max(0, seconds));
@@ -257,15 +279,12 @@ namespace CandyCruisers
             }
             if (phaseRemaining <= 0) arrivalMusic = null;
             shiftRemaining = Mathf.Max(0, shiftRemaining - seconds);
-            imitationRemaining = Mathf.Max(0, imitationRemaining - seconds);
             revealRemaining = Mathf.Max(0, revealRemaining - seconds);
             if (YellowRevealReturnActive) yellowRevealAge = Mathf.Min(
                 yellowRevealArrivalSeconds + yellowRevealReturnSeconds, yellowRevealAge + Mathf.Max(0, seconds));
-            movementPulseRemaining = Mathf.Max(0, movementPulseRemaining - seconds);
+            TickMovementPulse(seconds);
             summonFlashRemaining = Mathf.Max(0, summonFlashRemaining - seconds);
-            dashRemaining = Mathf.Max(0, dashRemaining - seconds);
-            PresentDash();
-            float assimilation = 1 - imitationRemaining / EnemyAbilities.ImitationSeconds;
+            float assimilation = 1 - imitationRemaining / EnemyAbilities.DefaultImitationSeconds;
             Color tint = EnemyPalette.Get(color);
             Color brilliant = color == EnemyColor.Purple ? new Color(1, .3f, 1) :
                 color == EnemyColor.Green ? new Color(.65f, 1, .75f) : Color.white;
@@ -335,6 +354,7 @@ namespace CandyCruisers
                     .5f + .5f * Mathf.Cos((.5f - revealRemaining) * Mathf.PI * 12));
             PresentYellowRevealReturn();
             PresentFeedingTendrils(assimilation);
+            ApplyGreenCloak(color);
         }
 
         private void PresentYellowRevealReturn()
@@ -359,25 +379,6 @@ namespace CandyCruisers
                 Mathf.Lerp(1.16f, 1, Mathf.Min(1, arrival + settled));
             imitation.color = new Color(yellow.r, yellow.g, yellow.b, alpha);
         }
-        private void PresentDash()
-        {
-            if (dashLines == null) return;
-            float fade = Mathf.Clamp01(dashRemaining / .42f);
-            for (int i = 0; i < dashLines.Length; i++)
-            {
-                var line = dashLines[i];
-                line.enabled = dashRemaining > 0;
-                if (!line.enabled) continue;
-                float length = .3f + (i % 3) * .12f;
-                var head = body.bounds.center + new Vector3(-dashDirection * .12f, (i - 2) * .09f);
-                line.startColor = new Color(.8f, 1, .7f, fade);
-                line.endColor = new Color(.25f, 1, .45f, 0);
-                line.startWidth = .035f * fade; line.endWidth = .008f * fade;
-                for (int j = 0; j < 3; j++)
-                    line.SetPosition(j, head + Vector3.left * dashDirection * (length + (1 - fade) * .16f) * j / 2);
-            }
-        }
-
         private void EnsureFeedingTendrils()
         {
             if (feedingTendrils != null) return;
@@ -462,7 +463,7 @@ namespace CandyCruisers
             arrowFleet = GetComponentInParent<EnemyGridMovement>();
             movementArrowTint = new MaterialPropertyBlock();
             movementArrowLayers = new MeshRenderer[4];
-            string[] names = { "outline", "blue rim", "white inset", "blue core" };
+            string[] names = { "outline", "green rim", "white inset", "green core" };
             float[] scales = { 1.12f, 1, .78f, .53f };
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
@@ -477,7 +478,7 @@ namespace CandyCruisers
                         movementArrowGradientMesh = Instantiate(movementArrowMesh);
                         var colors = new Color[movementArrowGradientMesh.vertexCount];
                         for (int v = 0; v < colors.Length; v++)
-                            colors[v] = Color.Lerp(new Color(0, .78f, .96f), new Color(.2f, .27f, .62f),
+                            colors[v] = Color.Lerp(new Color(.1f, 1, .45f), new Color(.08f, .48f, .15f),
                                 movementArrowGradientMesh.vertices[v].x + .5f);
                         movementArrowGradientMesh.colors = colors;
                     }
@@ -536,11 +537,105 @@ namespace CandyCruisers
             movementArrow.rotation = Quaternion.Euler(0, 0, tempoArrow ? 90 : movementArrowDirection < 0 ? 180 : 0);
         }
 
+        private void BeginGreenCloak(bool permanent, float? secondsToNextBeat = null)
+        {
+            RestoreCloakAlpha();
+            greenCloakActive = true;
+            greenCloakPermanent = permanent;
+            greenCloakElapsed = 0;
+            var music = GetComponentInParent<GameplayMusicPlayer>();
+            float beat = music != null ? music.BeatDuration : AbilityBeatClock.DefaultBeatSeconds;
+            greenCloakFadeSeconds = Mathf.Max(.001f, beat * .12f);
+            greenCloakMusic = music != null && music.BeatClockRunning ? music : null;
+            greenCloakOffbeatDelay = (secondsToNextBeat ?? beat) - beat * .5f;
+            if (greenCloakOffbeatDelay <= .00001f) greenCloakOffbeatDelay += beat;
+            if (greenCloakMusic == null) return;
+            greenCloakClip = music.Source.clip;
+            greenCloakPreview = music.PreviewTime.HasValue;
+            greenCloakStartSeconds = greenCloakMusicSeconds = music.PlaybackSeconds;
+            float offbeat = Mathf.Floor(music.BeatPosition) + .5f;
+            if (offbeat <= music.BeatPosition + .00001f) offbeat++;
+            greenCloakOffbeatDelay = music.SecondsAtBeat(offbeat) - greenCloakStartSeconds;
+        }
+
+        private void TickGreenCloak(float seconds)
+        {
+            if (!greenCloakActive) return;
+            if (greenCloakMusic != null)
+            {
+                float now = greenCloakMusic.PlaybackSeconds;
+                if (greenCloakMusic.Source.clip == greenCloakClip &&
+                    greenCloakMusic.PreviewTime.HasValue == greenCloakPreview && now >= greenCloakMusicSeconds - .05f)
+                {
+                    greenCloakMusicSeconds = Mathf.Max(greenCloakMusicSeconds, now);
+                    greenCloakElapsed = greenCloakMusicSeconds - greenCloakStartSeconds;
+                }
+                else greenCloakMusic = null;
+            }
+            if (greenCloakMusic == null) greenCloakElapsed += Mathf.Max(0, seconds);
+            if (!greenCloakPermanent && greenCloakElapsed + .00001f >= greenCloakOffbeatDelay)
+            {
+                greenCloakActive = false;
+                greenCloakMusic = null;
+            }
+        }
+
+        private void RestoreCloakAlpha()
+        {
+            if (!cloakAlphaApplied || body == null) return;
+            var tint = body.color;
+            tint.a = uncloakedBodyAlpha;
+            body.color = tint;
+            cloakAlphaApplied = false;
+        }
+
+        private void ApplyGreenCloak(EnemyColor color)
+        {
+            RestoreCloakAlpha();
+            if (color != EnemyColor.Green)
+            {
+                greenCloakActive = false;
+                greenCloakMusic = null;
+            }
+            if (!greenCloakActive || body == null) return;
+            var tint = body.color;
+            uncloakedBodyAlpha = tint.a;
+            tint.a *= 1 - Mathf.SmoothStep(0, 1, greenCloakElapsed / greenCloakFadeSeconds);
+            body.color = tint;
+            cloakAlphaApplied = true;
+        }
+
+        private void TickMovementPulse(float seconds)
+        {
+            if (movementPulseMusic != null)
+            {
+                float now = movementPulseMusic.PlaybackSeconds;
+                if (movementPulseMusic.Source.clip == movementPulseClip &&
+                    movementPulseMusic.PreviewTime.HasValue == movementPulsePreview && now >= movementPulseMusicSeconds - .05f)
+                {
+                    // Use soundtrack position, including pauses and tempo changes. A late
+                    // movement frame shortens the pulse instead of moving its ending off beat.
+                    movementPulseMusicSeconds = Mathf.Max(movementPulseMusicSeconds, now);
+                    movementPulseRemaining = Mathf.Clamp(movementPulseEndSeconds - movementPulseMusicSeconds, 0, movementPulseDuration);
+                    return;
+                }
+                // A changed track or a backwards seek finishes on the remaining local time.
+                movementPulseMusic = null;
+            }
+            movementPulseRemaining = Mathf.Max(0, movementPulseRemaining - Mathf.Max(0, seconds));
+        }
+
         private void LateUpdate()
         {
+            RestoreCloakAlpha();
+            TickGreenCloak(0);
             // Resolve placement after fleet movement and the actor's beat-scale animation.
             if (movementArrow != null && (movementPulseRemaining > 0 || tempoArrow))
+            {
+                TickMovementPulse(0);
                 PresentMovementArrow(GetComponent<GridEnemy>().Color);
+            }
+            if (body != null) ApplyGreenCloak(GetComponent<GridEnemy>().Color);
         }
 
         private void PresentMovementArrow(EnemyColor color)
@@ -548,22 +643,24 @@ namespace CandyCruisers
             if (movementArrow == null) return;
             bool active = color == EnemyColor.Green && (movementPulseRemaining > 0 || tempoArrow);
             foreach (var renderer in movementArrowLayers) renderer.enabled = active;
-            if (!active) return;
+            if (color != EnemyColor.Green) return;
             RefreshMovementArrowDirection();
-            float progress = 1 - movementPulseRemaining / MovementPulseSeconds;
-            float width = Mathf.Clamp(Mathf.Max(body.bounds.size.x, body.bounds.size.y) * 1.8f, 1.05f, 1.35f);
+            float progress = Mathf.Clamp01(1 - movementPulseRemaining / movementPulseDuration);
+            float sizeRatio = Mathf.Lerp(.3f, 1.75f, progress);
+            float enemySize = Mathf.Max(body.bounds.size.x, body.bounds.size.y);
+            // Include the outer outline when measuring the regular arrow's percentage.
+            float width = enemySize * sizeRatio / 1.12f;
             if (tempoArrow)
-                width = Mathf.Min(width, (GetComponentInParent<EnemyGrid>()?.Spacing ?? .75f) * .78f);
-            width *= 1 + .12f * Mathf.Sin(progress * Mathf.PI);
+            {
+                width = Mathf.Min(Mathf.Clamp(enemySize * 1.8f, 1.05f, 1.35f),
+                    (GetComponentInParent<EnemyGrid>()?.Spacing ?? .75f) * .78f);
+                width *= 1 + .12f * Mathf.Sin(progress * Mathf.PI);
+            }
             var parentScale = movementArrow.parent.lossyScale;
             movementArrow.localScale = new Vector3(width / Mathf.Max(.001f, Mathf.Abs(parentScale.x)),
                 width / Mathf.Max(.001f, Mathf.Abs(parentScale.y)), 1);
-            var center = body.bounds.center + (tempoArrow ? Vector3.up * (body.bounds.extents.y + width * .57f) :
-                Vector3.right * movementArrowDirection * .09f * Mathf.SmoothStep(0, 1, progress));
-            float edge = PlayerMovement.HalfWidth - width * .56f - .025f;
-            center.x = Mathf.Clamp(center.x, -edge, edge);
-            movementArrow.position = center;
-            float fade = tempoArrow ? 1 : Mathf.Clamp01(movementPulseRemaining / .14f);
+            movementArrow.position = body.bounds.center;
+            float fade = tempoArrow ? 1 : 1 - Mathf.SmoothStep(0, 1, Mathf.Clamp01((sizeRatio - 1.1f) / .65f));
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
                 var tint = i == 0 ? new Color(.13f, .12f, .12f) : Color.white;
@@ -600,14 +697,18 @@ namespace CandyCruisers
 
         public void Clear()
         {
+            RestoreCloakAlpha();
+            greenCloakActive = greenCloakPermanent = false;
+            greenCloakMusic = null;
             if (growing && body != null) body.transform.localScale = restingBodyScale;
             growing = false;
             if (greenSpinRemaining > 0 && body != null) body.transform.localRotation = greenRestingRotation;
             greenSpinRemaining = 0;
             tempoArrow = false;
+            movementPulseMusic = null;
             if (aimingApplied && body != null) body.transform.localRotation = restingRotation;
             aimingApplied = false;
-            phaseRemaining = shiftRemaining = imitationRemaining = revealRemaining = movementPulseRemaining = summonFlashRemaining = dashRemaining = 0;
+            phaseRemaining = shiftRemaining = imitationRemaining = revealRemaining = movementPulseRemaining = summonFlashRemaining = 0;
             yellowRevealSprite = null;
             yellowRevealAge = yellowRevealArrivalSeconds = yellowRevealReturnSeconds = 0;
             feedingImitation = false;
@@ -615,7 +716,6 @@ namespace CandyCruisers
             target = null;
             if (tendril == null) return;
             tendril.enabled = portal.enabled = streak.enabled = imitation.enabled = false;
-            if (dashLines != null) foreach (var line in dashLines) line.enabled = false;
             if (feedingTendrils != null) foreach (var line in feedingTendrils) line.enabled = false;
             if (movementArrowLayers != null)
                 foreach (var renderer in movementArrowLayers) renderer.enabled = false;

@@ -26,7 +26,7 @@ namespace CandyCruisers.Editor
                     var rest = body.localRotation;
                     var bounds = red.HitBounds;
                     var before = UnityEngine.Object.FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None);
-                    ability.Tick(ability.CooldownRemaining - .46f);
+                    ability.Tick(ability.CooldownRemaining - AbilityBeatClock.DefaultBeatSeconds - .01f);
                     Check(Quaternion.Angle(rest, body.localRotation) < .001f, "Red rests before its warning");
                     ability.Tick(.02f);
                     float turned = Quaternion.Angle(rest, body.localRotation);

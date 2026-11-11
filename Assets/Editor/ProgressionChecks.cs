@@ -90,7 +90,7 @@ namespace CandyCruisers.Editor
             {
                 var grid = root.GetComponent<EnemyGrid>();
                 var movement = root.GetComponent<EnemyGridMovement>();
-                movement.UseGreenDashes = true;
+                movement.UseLegacyMovement = true;
                 var spawner = root.GetComponent<EnemyRowSpawner>();
                 spawner.Configure(Prefab(EnemyColor.Blue), Prefab(EnemyColor.Red));
                 spawner.ConfigureNewTypes(Prefab(EnemyColor.Green), Prefab(EnemyColor.Purple), Prefab(EnemyColor.Yellow), Prefab(EnemyColor.Orange));
@@ -113,58 +113,18 @@ namespace CandyCruisers.Editor
                 var green = Add(grid, EnemyColor.Green, 2, 0);
                 var green2 = Add(grid, EnemyColor.Green, 3, 0);
                 var ability = green.GetComponent<EnemyAbilities>();
-                ability.Tick(21);
-                Check(ability.IsCasting && root.transform.position == Vector3.zero, "Green warns before moving");
-                ability.Tick(.8f);
-                ability.Tick(.18f);
-                Check(Mathf.Abs(root.transform.position.x - .1f) < .001f, "One Green contributes a shortened physical step");
-                var second = green2.GetComponent<EnemyAbilities>();
-                second.Tick(21); second.Tick(.8f); second.Tick(.18f);
-                Check(Mathf.Abs(root.transform.position.x - .2f) < .001f, "Each Green contributes independently");
-                second.Suspended = true;
-                second.Tick(100);
-                Check(Mathf.Abs(root.transform.position.x - .2f) < .001f, "Suspended abilities do not advance");
-                movement.ResetSweep();
-                // Edit-mode fixtures do not invoke MonoBehaviour.OnEnable automatically.
-                movement.SweepEnded += () => spawner.TryAdvance();
-                grid.OccupiedHorizontalBounds(out _, out float beforeDashRight);
-                movement.AdvanceDistance(PlayerMovement.HalfWidth - beforeDashRight - .05f);
-                ability.Tick(21); ability.Tick(.8f); ability.Tick(.18f);
-                Check(movement.Direction == -1 && grid.Model.Count == 2 + RunProgress.StandardRowWidth, "Green burst at occupied edge turns and descends exactly once: direction=" +
-                    movement.Direction + " count=" + grid.Model.Count + " x=" + root.transform.position.x + " casting=" + ability.IsCasting);
-                grid.OccupiedHorizontalBounds(out float left, out float right);
-                Check(left >= -3.0001f && right <= 3.0001f, "Green burst respects playfield after reindexing");
+                ability.Tick(100);
+                green2.GetComponent<EnemyAbilities>().Tick(100);
+                Check(!ability.IsCasting && !ability.Warning && root.transform.position == Vector3.zero,
+                    "Regular Greens have no dash ability even with legacy fleet travel enabled");
                 Empty(grid); movement.ResetSweep();
-
-                movement.enabled = false;
-                float shortest = float.MaxValue, longest = 0;
-                int resampled = 0;
-                var greenRange = CombatBalance.CooldownRange(EnemyColor.Green, session.Progress.Level);
-                for (int sample = 0; sample < 24; sample++)
-                {
-                    var timed = Add(grid, EnemyColor.Green, 2, 0).GetComponent<EnemyAbilities>();
-                    float initial = UntilGreenWarning(timed);
-                    timed.Tick(.8f);
-                    timed.Tick(.18f);
-                    float subsequent = UntilGreenWarning(timed) + .18f;
-                    Check(initial >= greenRange.x - .1f && initial <= greenRange.y + .1f &&
-                        subsequent >= greenRange.x - .1f && subsequent <= greenRange.y + .1f,
-                        "Initial and repeated Green cooldowns stay within the configured range");
-                    shortest = Mathf.Min(shortest, initial);
-                    longest = Mathf.Max(longest, initial);
-                    if (Mathf.Abs(initial - subsequent) > .5f) resampled++;
-                    Empty(grid);
-                }
-                Check(longest - shortest > (greenRange.y - greenRange.x) * .66f && resampled > 12,
-                    "Greens use staggered, freshly sampled cooldowns across the configured range");
-                movement.enabled = true;
 
                 var yellow = Add(grid, EnemyColor.Yellow, 2, 0);
                 var blue = Add(grid, EnemyColor.Blue, 3, 0);
                 yellow.GetComponent<EnemyAbilities>().Tick(41);
                 Check(yellow.Color == EnemyColor.Yellow && yellow.GetComponent<EnemyAbilities>().IsTransforming,
                     "Yellow remains matchable during transformation");
-                yellow.GetComponent<EnemyAbilities>().Tick(EnemyAbilities.ImitationSeconds);
+                yellow.GetComponent<EnemyAbilities>().Tick(EnemyAbilities.DefaultImitationSeconds);
                 Check(yellow.Color == EnemyColor.Blue && grid.Model.ColorCount(EnemyColor.Yellow) == 0 &&
                     grid.Model.ColorCount(EnemyColor.Blue) == 2, "Ordinary Yellow permanently changes model color");
                 var copiedBlue = yellow.GetComponent<EnemyAbilities>();
@@ -189,6 +149,7 @@ namespace CandyCruisers.Editor
                 Check(candidates.Values.SelectMany(c => c).All(c => c.y <= 4), "Ordinary Purple cannot extend deepest row");
                 int count = grid.Model.Count;
                 purple.GetComponent<EnemyAbilities>().Tick(51);
+                purple.GetComponent<EnemyAbilities>().Tick(AbilityBeatClock.DefaultBeatSeconds);
                 Check(grid.Model.Count == count + 1, "Purple summons one ordinary enemy");
                 foreach (var enemy in root.GetComponentsInChildren<GridEnemy>())
                     Check(grid.Model.At(enemy.Column, enemy.Row).Id == enemy.Id, "Summon preserves model/view agreement");
@@ -233,17 +194,10 @@ namespace CandyCruisers.Editor
                 UnityEngine.Object.DestroyImmediate(root);
                 UnityEngine.Random.state = random;
             }
-            Debug.Log("Progression checks passed: scoring, thresholds, unlocks, independent bursts, original imitation and fleet-wide summons.");
+            Debug.Log("Progression checks passed: scoring, thresholds, unlocks, passive regular Greens, original imitation and fleet-wide summons.");
         }
 
         private static GameObject Prefab(EnemyColor color) => AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/" + color + " Enemy.prefab");
-        private static float UntilGreenWarning(EnemyAbilities ability)
-        {
-            int ticks = 0;
-            while (!ability.IsCasting && ticks < 210) { ability.Tick(.1f); ticks++; }
-            Check(ability.IsCasting, "Green eventually begins its windup");
-            return ticks * .1f;
-        }
         public static GridEnemy Add(EnemyGrid grid, EnemyColor color, int column, int row)
         {
             var instance = UnityEngine.Object.Instantiate(Prefab(color));

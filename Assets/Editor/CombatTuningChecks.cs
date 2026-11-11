@@ -15,7 +15,7 @@ namespace CandyCruisers.Editor
             {
                 var grid = root.GetComponent<EnemyGrid>();
                 var movement = root.GetComponent<EnemyGridMovement>();
-                Check(!movement.UseGreenDashes, "Green-count movement is the default");
+                Check(!movement.UseLegacyMovement, "Green-count movement is the default");
                 grid.Model.TryAdd(1, EnemyColor.Red, 1, 0);
                 movement.Tick(100);
                 Check(movement.CurrentSpeed == 0 && root.transform.position == Vector3.zero, "No Greens means no motion");

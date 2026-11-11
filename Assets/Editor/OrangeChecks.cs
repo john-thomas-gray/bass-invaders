@@ -84,7 +84,7 @@ namespace CandyCruisers.Editor
                 Add(grid, EnemyColor.Yellow, 0, 1); Add(grid, EnemyColor.Yellow, 1, 1);
                 grid.RefreshSpecials();
                 Check(yellow.IsSpecial && ability.BeginImitation(orange), "Special Yellow can mimic Orange");
-                ability.Tick(EnemyAbilities.ImitationSeconds);
+                ability.Tick(EnemyAbilities.DefaultImitationSeconds);
                 Check(ability.IsDisguised && yellow.Color == EnemyColor.Yellow && grid.Model.ColorCount(EnemyColor.Orange) == 1,
                     "Disguised Yellow remains logically Yellow beside Orange");
                 Check(yellow.Visuals.Body.sprite == grid.GetComponent<EnemyRowSpawner>().SpecialSprite &&
@@ -111,7 +111,13 @@ namespace CandyCruisers.Editor
                 Add(grid, EnemyColor.Green, 4, 0);
                 int ordinaryClears = 0;
                 grid.MatchCleared += (count, all, weight) => ordinaryClears++;
-                grid.TickRetreat(.16f);
+                var music = grid.GetComponent<GameplayMusicPlayer>();
+                if (music == null) music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                music.PreviewTempo = GameplayMusicPlayer.DefaultBeatsPerMinute;
+                music.PreviewTime = 0;
+                grid.TickRetreat(0);
+                music.PreviewTime = AbilityBeatClock.DefaultBeatSeconds;
+                grid.TickRetreat(0);
                 Check(grid.Model.ColorCount(EnemyColor.Orange) == 0 && grid.Model.Count == 1, "Retreat detonates all touching Oranges only");
                 Check(session.Progress.Score == oranges * 500 && session.Progress.Defeated == oranges && ordinaryClears == 0,
                     "Retreat awards exactly five base points per Orange, without borrowing shot combo");

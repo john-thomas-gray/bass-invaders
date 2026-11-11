@@ -12,6 +12,7 @@ namespace CandyCruisers.Editor
             SpecialGreenTempoChecks.Run();
             SpecialEnemyChecks.Run();
             FleetTickChecks.Run();
+            GreenCloakChecks.Run();
             Run();
         }
         public static void Run()

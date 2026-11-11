@@ -74,6 +74,8 @@ namespace CandyCruisers.Editor
                             "Summon flash fades to Purple without changing geometry");
                         var ability = purple.GetComponent<EnemyAbilities>();
                         ability.Tick(ability.CooldownRemaining + .01f);
+                        Check(ability.IsCasting && ability.Warning, "Purple warns for one beat before summoning");
+                        ability.Tick(AbilityBeatClock.DefaultBeatSeconds);
                         Check(purple.Visuals.Body.color == Color.white && halo.All(line => line.enabled),
                             "The triggering frame cannot consume the new flash, even with a large frame delta");
                         grid.SetColor(purple.Id, EnemyColor.Blue);
@@ -130,7 +132,7 @@ namespace CandyCruisers.Editor
                     Check(ability.BeginImitation(red), "Special Yellow begins a disguise");
                     Check(!grid.Model.TryGetImitationTarget(yellow.Id, out _) && grid.Model.SelectablePlayerColors().Contains(EnemyColor.Yellow),
                         "Disguise creates no combat link and keeps Yellow selectable");
-                    ability.Tick(EnemyAbilities.ImitationSeconds);
+                    ability.Tick(EnemyAbilities.DefaultImitationSeconds);
                     Check(ability.IsDisguised && !ability.IsTransforming && yellow.Color == EnemyColor.Yellow &&
                         grid.Model.ColorCount(EnemyColor.Yellow) == 1 && grid.Model.ColorCount(EnemyColor.Red) == 2 &&
                         yellow.GetComponentInChildren<SpriteRenderer>().sprite == red.GetComponentInChildren<SpriteRenderer>().sprite &&

@@ -96,7 +96,8 @@ namespace CandyCruisers.Editor
                             Check(green.GetComponentsInChildren<MeshRenderer>().Length == 4, "Shared layered dance arrow exists");
                             var arrow = green.GetComponentsInChildren<MeshRenderer>()[0].transform.parent;
                             Check(Vector3.Dot(arrow.right, Vector3.up) > .99f, "Special arrow points upward");
-                            Check(arrow.position.y > green.Visuals.Body.bounds.max.y, "Special arrow remains above its owner");
+                            Check(Vector3.Distance(arrow.position, green.Visuals.Body.bounds.center) < .0001f,
+                                "Special arrow is centered on its respective enemy");
                             var presentation = green.GetComponent<EnemyPresentation>();
                             float width = arrow.lossyScale.x;
                             presentation.Tick(EnemyPresentation.MovementPulseSeconds / 4, EnemyColor.Green, 0);
@@ -105,6 +106,11 @@ namespace CandyCruisers.Editor
                             Check(green.GetComponentsInChildren<MeshRenderer>().All(layer => layer.enabled),
                                 "Special up arrow persists after its activation animation");
                         }
+                        int fallsBeforeOrdinary = UnityEngine.Object.FindObjectsByType<GreenTempoFall>(FindObjectsSortMode.None).Length;
+                        var ordinary = ProgressionChecks.Add(grid, EnemyColor.Green, 4, 4);
+                        grid.ClearMatchingChain(ordinary.Id, EnemyColor.Green);
+                        Check(UnityEngine.Object.FindObjectsByType<GreenTempoFall>(FindObjectsSortMode.None).Length == fallsBeforeOrdinary,
+                            "Destroyed ordinary greens never show down arrows");
                         float beatDuration = music.BeatDuration;
                         grid.SetColor(first.Id, EnemyColor.Red);
                         session.Tick(0); music.UpdatePlayback();

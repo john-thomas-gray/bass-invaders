@@ -13,7 +13,7 @@ namespace CandyCruisers.Editor
             {
                 var grid = root.GetComponent<EnemyGrid>();
                 var movement = root.GetComponent<EnemyGridMovement>();
-                movement.UseGreenDashes = true;
+                movement.UseLegacyMovement = true;
                 var spawner = root.GetComponent<EnemyRowSpawner>();
                 spawner.Configure(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Blue Enemy.prefab"),
                     AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Red Enemy.prefab"));

@@ -14,7 +14,7 @@ namespace CandyCruisers.Editor
                 Check(!grid.GetComponent<EnemyRowSpawner>().TryAdvance() && session.State == GameSession.RunState.Playing,
                     "Occupied last row blocks descent without ending game");
                 var movement = grid.GetComponent<EnemyGridMovement>();
-                movement.UseGreenDashes = true;
+                movement.UseLegacyMovement = true;
                 movement.AdvanceDistance(.1);
                 Check(session.State == GameSession.RunState.Playing, "Fleet still sweeps while bottom row is occupied");
                 player.transform.position = new Vector3(0, -4.6f, 0);
@@ -40,7 +40,7 @@ namespace CandyCruisers.Editor
             {
                 var enemy = Add(grid, 0);
                 var movement = grid.GetComponent<EnemyGridMovement>();
-                movement.UseGreenDashes = true;
+                movement.UseLegacyMovement = true;
                 movement.AdvanceDistance(3);
                 Check(session.State == GameSession.RunState.Playing && player.Lives == PlayerMovement.MaxLives - 1 &&
                     Mathf.Abs(enemy.HitBounds.max.x - player.HitBounds.min.x) < .0001f,

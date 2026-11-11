@@ -314,7 +314,7 @@ namespace CandyCruisers
                     break;
                 case Animation.YellowImitation:
                     int sample = 0;
-                    float sampleSpacing = EnemyAbilities.ImitationSeconds + music.BeatDuration * 3f + .5f;
+                    float sampleSpacing = music.SecondsForBeats(EnemyAbilities.ImitationBeats + 3) + .5f;
                     foreach (EnemyColor color in Enum.GetValues(typeof(EnemyColor)))
                     {
                         if (color == EnemyColor.Yellow) continue;

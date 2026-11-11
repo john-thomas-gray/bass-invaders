@@ -194,7 +194,7 @@ namespace CandyCruisers.Editor
                     ability.Tick(10);
                     Check(yellow.Color == EnemyColor.Yellow, "Paused transformation cannot finish");
                     ability.Suspended = false;
-                    ability.Tick(1.99f);
+                    ability.Tick(EnemyAbilities.DefaultImitationSeconds - .01f);
                     Check(player.Alive && yellow.Color == EnemyColor.Yellow, "No penalty before completion");
                     ability.Tick(.01f);
                     Check(yellow.Color == EnemyColor.Blue && !ability.IsTransforming && penalties == 1, "Conversion completes exactly once");
@@ -249,7 +249,7 @@ namespace CandyCruisers.Editor
                 var ability = yellow.GetComponent<EnemyAbilities>();
                 var presentation = yellow.GetComponent<EnemyPresentation>();
                 Check(ability.BeginImitation(blue), "Start conversion with a joined group");
-                ability.Tick(EnemyAbilities.ImitationSeconds);
+                ability.Tick(EnemyAbilities.DefaultImitationSeconds);
                 var pulse = grid.GetComponent<YellowGroupPulse>();
                 Check(yellow.Color == EnemyColor.Blue && presentation.YellowRevealReturnActive &&
                     pulse != null && pulse.ActivePulseCount == 1 && pulse.EdgeCount == 8,

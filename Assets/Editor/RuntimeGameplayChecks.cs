@@ -160,7 +160,7 @@ namespace CandyCruisers.Editor
                     initialMovement.Tick(10);
                     Require(initialMovement.CurrentSpeed == 0 && grid.transform.position == openingPosition, "No Greens means a stationary opening fleet");
                     // Continue the retained dash-mode integration coverage after checking the new default.
-                    initialMovement.UseGreenDashes = true;
+                    initialMovement.UseLegacyMovement = true;
                     var enemy = grid.GetComponentInChildren<GridEnemy>();
                     enemy.gameObject.SetActive(false);
                     Require(grid.Model.Count == 2 * RunProgress.StandardRowWidth - 1, "Disabled enemy unregisters");
@@ -448,7 +448,7 @@ namespace CandyCruisers.Editor
                     foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
                         if (enemy.Column != 2) enemy.gameObject.SetActive(false);
                     var sparseMovement = grid.GetComponent<EnemyGridMovement>();
-                    sparseMovement.UseGreenDashes = true;
+                    sparseMovement.UseLegacyMovement = true;
                     sparseMovement.ResetSweep();
                     sparseMovement.Tick(2.5);
                     Require(grid.Model.Count == 2 && sparseMovement.Direction == 1,
@@ -611,7 +611,7 @@ namespace CandyCruisers.Editor
             foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
             { enemy.gameObject.SetActive(false); UnityEngine.Object.Destroy(enemy.gameObject); }
             var session = grid.GetComponent<GameSession>();
-            movement.UseGreenDashes = false;
+            movement.UseLegacyMovement = false;
             session.Progress.Reset(5);
             session.Progress.RegisterClear(session.Progress.NextThreshold - session.Progress.Defeated - 1, true);
             var colors = new[] { EnemyColor.Blue, EnemyColor.Blue, EnemyColor.Green, EnemyColor.Red, EnemyColor.Purple, EnemyColor.Yellow };

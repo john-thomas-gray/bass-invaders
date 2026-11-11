@@ -198,7 +198,7 @@ from its last candidate. Candidates outside the visible horizontal boundary
 are also excluded to respect the rebuild's occupied-column motion.
 
 Its rebalanced cooldown starts at 6-9 seconds and follows the shared gentle
-maximum reduction below. Purple flashes brightly in the final 0.45 seconds.
+maximum reduction below. Purple flashes brightly for the beat before its summon triggers.
 The summon is registered immediately when the cooldown completes; its rift and
 0.8-second phase-in are presentation only. The summoned enemy can be matched
 and use its abilities during the phase-in. A full fleet produces no summon.
@@ -214,7 +214,7 @@ level unlocks, overrides, cooldowns and rift presentation are unchanged.
 ## Yellow: Linked Transformation
 
 Ordinary Yellow randomly chooses an occupied orthogonal non-Yellow neighbor and attaches
-to it for two seconds. During this transition it remains logically Yellow:
+to it for two soundtrack beats. During this transition it remains logically Yellow:
 Yellow shots can hit it, Yellow counts include it, and it does not yet receive
 the destination type's ordinary ability.
 
@@ -249,7 +249,7 @@ special link to the converted enemy.
 ## Special Yellow: Disguise
 
 Tier-two Yellow visually imitates a non-Yellow orthogonal neighbor over the same
-two-second transition, without a tendril or combat link. It copies the sprite,
+two-beat transition, without a tendril or combat link. It copies the sprite,
 scale and color, not the enemy's abilities or logical identity. It remains Yellow
 for counts, player-color availability, connected clears, promotion and rewards.
 Two real Reds and a disguised Yellow therefore remain a two-Red group, not a
@@ -284,25 +284,35 @@ tempo by 3%. Each special can activate only once, and its boost lasts while it
 remains an active special Green. The track keeps its current playback position.
 
 Regular movement pulses and special tempo indicators share a chamfered,
-black-outlined dance-pad arrow with blue gradient and white insets. Regular
-arrows follow horizontal fleet direction and fade after a pulse. An activated
-special's arrow points up and stays above that enemy. Specials do not spin or
+black-outlined dance-pad arrow with green gradient and white insets. Regular
+arrows stay centered on their enemies and follow horizontal fleet direction.
+They grow from 30% to 175% of the enemy size; opacity stays full through 110%
+size, then eases smoothly to zero at 175%. Growth and fade finish together at the
+start of the next soundtrack beat, including when a movement frame arrives late. An activated
+special's arrow points up and stays centered on that enemy. Specials do not spin or
 show fleet-wide speed wakes.
 
-When Greens are cleared, detached down arrows fall and fade over one beat.
+As an arrow appears, its Green body fades out over 12% of a beat. Ordinary
+Greens reappear on the next offbeat (the half-beat mark); activated specials
+stay cloaked with their upward arrows visible. This changes only the artwork:
+cloaked enemies retain their collision bounds, matching, abilities and tempo
+contributions. Pause freezes cloaking; recoloring or clearing the effect restores
+normal opacity.
+
+When special Greens are cleared, detached down arrows fall and fade over one beat.
 Lost tempo boosts ease down together over one beat rather than changing speed
 instantly. Pause freezes the decrease and arrows. Transforming or removing an
 activated special also removes its boost with the same easing.
 
-`EnemyGridMovement.UseGreenDashes` remains an optional legacy switch, false by
-default, for base travel and ordinary Green dashes. It never gives special Greens
-a dash. Normal travel and legacy bursts use `EnemyGridMovement.AdvanceDistance`,
+Regular Greens have no dash ability. `EnemyGridMovement.UseLegacyMovement` remains
+an optional switch, false by default, for continuous fleet travel in mechanics fixtures.
+Fleet travel uses `EnemyGridMovement.AdvanceDistance`,
 including occupied-column edge detection, contact, reversal, descent and spawning.
 
 ## Shared Difficulty Scaling
 
 Starting cooldown ranges are Red 2.25-7.5 seconds, Blue recharge 2.25-7.5,
-special Green activation / legacy Green dashes 6-9, Purple 6-9, and Yellow 1.5-4.5. Each enemy independently resamples its
+special Green activation 6-9, Purple 6-9, and Yellow 1.5-4.5. Each enemy independently resamples its
 interval after activation. Ordinary Blue starts unshielded, with its initial
 cooldown counting from spawn. Only after that cooldown expires does its shield
 power up for 0.35 seconds; it cannot protect or render during the spawn rift.
@@ -445,7 +455,9 @@ and tongue turn grey, movement and firing stop, and the stun ends exactly when
 the tongue finishes or is canceled. Blue shots and magic bypass the shield.
 Ordinary Blues retain their existing breakable full-ring shields.
 
-Tier-two Reds retain the existing cooldown and .45-second firing warning.
+All scheduled abilities use the same warning window: the soundtrack beat immediately
+before activation. Active shields and passive regular Green movement have no pending
+ability warning. Tier-two Reds aim during that shared one-beat warning.
 During the warning, the triangle rotates toward the player's current position
 at 540 degrees per second. At launch, it aligns exactly with the shot direction,
 fires from its forward tip, then smoothly returns to its resting downward pose.
@@ -579,3 +591,7 @@ restart reset, and crossing an unlock threshold through a real clear.
 The editor-only `RuntimeGameplayChecks.Preview` builds a temporary cue showcase
 and captures `TestResults/ability-feedback.png` in a visible Unity session.
 It never saves the showcase over the gameplay scene.
+
+Disconnected enemies retreat one grid space per soundtrack beat. Retreat and Yellow
+transformation follow soundtrack position across pauses and tempo changes, with a
+default-tempo beat clock when no soundtrack is available.

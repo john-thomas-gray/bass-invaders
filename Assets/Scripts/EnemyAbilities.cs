@@ -13,12 +13,13 @@ namespace CandyCruisers
         private float cooldownBeat;
         private float castBeat;
         private GameplayMusicPlayer music;
-        private float cooldown => beatClock.SecondsUntil(cooldownBeat, Application.isPlaying ? music : null);
+        private float cooldown => beatClock.SecondsUntil(cooldownBeat, music != null && (Application.isPlaying || music.PreviewTime.HasValue) ? music : null);
         private EnemyGrid grid;
         private EnemyPresentation presentation;
         private float castRemaining;
-        private float burstRemaining;
-        public const float ImitationSeconds = 2f;
+        public const int ImitationBeats = 2;
+        public const float DefaultImitationSeconds = ImitationBeats * AbilityBeatClock.DefaultBeatSeconds;
+        private float imitationEndBeat;
         private float imitationRemaining;
         private EnemyColor? disguiseColor;
         private Sprite undisguisedSprite;
@@ -63,9 +64,14 @@ namespace CandyCruisers
         private bool greenTempoTriggered;
         public bool GreenTempoActive => greenTempoTriggered && enemy != null && enemy.IsSpecial && enemy.Color == EnemyColor.Green;
         private bool CanCastGreen => enemy != null && enemy.Color == EnemyColor.Green &&
-            (enemy.IsSpecial ? !greenTempoTriggered : grid.GetComponent<EnemyGridMovement>()?.UseGreenDashes == true);
-        public bool Warning => enemy != null && enemy.Color != EnemyColor.Blue &&
-            (enemy.Color != EnemyColor.Green || CanCastGreen) && (cooldown <= .45f || IsCasting);
+            enemy.IsSpecial && !greenTempoTriggered;
+        private bool UsesCast => enemy != null && (enemy.Color == EnemyColor.Green ||
+            enemy.Color == EnemyColor.Purple || enemy.Color == EnemyColor.Orange);
+        private float TriggerBeat => IsCasting ? castBeat : cooldownBeat + (UsesCast ? 1 : 0);
+        public bool Warning => enemy != null && !IsTransforming && !IsDisguised &&
+            (enemy.Color != EnemyColor.Green || CanCastGreen) &&
+            (enemy.Color != EnemyColor.Blue || !ShieldActive && !shieldSpent && !awaitingSpawnShield && shieldPowerRemaining <= 0) &&
+            beatClock.Reached(TriggerBeat - 1) && !beatClock.Reached(TriggerBeat);
         public Bounds ShieldBounds => new Bounds(enemy.HitBounds.center, enemy.HitBounds.size * 1.25f);
         public void BeginSpawnEffect(EnemyColor? effectColor = null, bool warp = false)
         {
@@ -113,7 +119,7 @@ namespace CandyCruisers
             grid.Model.CancelImitation(enemy.Id);
             grid.GetComponent<EnemyRowSpawner>()?.ApplyAppearance(enemy);
             currentColor = enemy.Color;
-            castRemaining = burstRemaining = 0;
+            castRemaining = 0;
             imitationRemaining = 0;
             presentation.Clear();
             ShieldActive = currentColor == EnemyColor.Blue && enemy.IsSpecial;
@@ -134,15 +140,15 @@ namespace CandyCruisers
             var range = CombatBalance.CooldownBeats(currentColor, grid.GetComponent<GameSession>()?.Progress.Level ?? 1,
                 enemy.IsSpecial);
             float beats = Random.Range(Mathf.RoundToInt(range.x), Mathf.RoundToInt(range.y) + 1);
-            if (noEffect) beats *= .5f;
-            cooldownBeat = noEffect ? beatClock.Position + beats : beatClock.AfterBeats(Mathf.RoundToInt(beats));
+            if (noEffect) beats = Mathf.Max(1, Mathf.Round(beats * .5f));
+            cooldownBeat = beatClock.AfterBeats(Mathf.RoundToInt(beats));
         }
 
         private void AdvanceBeatClock(float seconds)
         {
             if (music == null) music = grid.GetComponent<GameplayMusicPlayer>();
-            if (Application.isPlaying && music != null && music.Source.clip != null)
-                beatClock.Advance(seconds, music.BeatPosition, music.Source.clip.GetInstanceID());
+            if (music != null && (music.PreviewTime.HasValue || Application.isPlaying && music.Source.clip != null))
+                beatClock.Advance(seconds, music.BeatPosition, music.Source.clip != null ? music.Source.clip.GetInstanceID() : 0);
             else beatClock.Advance(seconds);
         }
 
@@ -157,7 +163,8 @@ namespace CandyCruisers
             seconds = Mathf.Max(0, seconds);
             if (IsDisguised)
             {
-                imitationRemaining = Mathf.Max(0, imitationRemaining - seconds);
+                imitationRemaining = Mathf.Max(0, imitationEndBeat - beatClock.Position);
+                presentation.SetImitationProgress(1 - imitationRemaining / ImitationBeats);
                 presentation.Tick(seconds, disguiseColor.Value, 0);
                 return;
             }
@@ -169,7 +176,8 @@ namespace CandyCruisers
                     ResetAbility();
                     return;
                 }
-                imitationRemaining = Mathf.Max(0, imitationRemaining - seconds);
+                imitationRemaining = Mathf.Max(0, imitationEndBeat - beatClock.Position);
+                presentation.SetImitationProgress(1 - imitationRemaining / ImitationBeats);
                 presentation.Tick(seconds, enemy.Color, 0);
                 if (imitationRemaining <= .000001f)
                 {
@@ -192,16 +200,7 @@ namespace CandyCruisers
                 awaitingSpawnShield = false;
                 if (shieldPowerRemaining > 0) grid.GetComponent<SoundEffects>()?.PlayCue(SoundEffect.ShieldPower);
             }
-            if (!CanCastGreen && enemy.Color == EnemyColor.Green) castRemaining = burstRemaining = 0;
-            if (burstRemaining > 0 && CanCastGreen && !enemy.IsSpecial)
-            {
-                float used = Mathf.Min(seconds, burstRemaining);
-                burstRemaining -= used;
-                float before = transform.position.x;
-                grid.GetComponent<EnemyGridMovement>()?.AdvanceDistance(used / .18f * .1f);
-                presentation.SetDashDirection(transform.position.x - before);
-                if (Suspended || !isActiveAndEnabled) return;
-            }
+            if (!CanCastGreen && enemy.Color == EnemyColor.Green) castRemaining = 0;
             bool startSummonFlash = false;
             if (IsCasting)
             {
@@ -217,7 +216,7 @@ namespace CandyCruisers
                 ? player.transform.position - transform.position : Vector3.down;
             aimDirection.z = 0;
             aimDirection = aimDirection.sqrMagnitude > .000001f ? aimDirection.normalized : Vector3.down;
-            bool aimingRed = enemy.Color == EnemyColor.Red && enemy.IsSpecial && cooldown <= .45f;
+            bool aimingRed = enemy.Color == EnemyColor.Red && enemy.IsSpecial && (Warning || beatClock.Reached(cooldownBeat));
             presentation.AimRed(aimDirection, aimingRed, seconds, aimingRed && cooldown <= 0);
             if (enemy.Color == EnemyColor.Red && beatClock.Reached(cooldownBeat))
             {
@@ -287,14 +286,8 @@ namespace CandyCruisers
         {
             if (enemy.Color == EnemyColor.Green && CanCastGreen)
             {
-                if (enemy.IsSpecial)
-                {
-                    greenTempoTriggered = true;
-                    return false;
-                }
-                burstRemaining = .18f;
-                var movement = grid.GetComponent<EnemyGridMovement>();
-                foreach (var visual in grid.GetComponentsInChildren<EnemyPresentation>()) visual.SpeedShift(movement.Direction);
+                greenTempoTriggered = true;
+                return false;
             }
             else if (enemy.Color == EnemyColor.Purple)
             {
@@ -319,7 +312,9 @@ namespace CandyCruisers
                 disguiseColor = target.Color;
                 enemy.Visuals.CopyVisualScale(target.Visuals);
             }
-            imitationRemaining = ImitationSeconds;
+            AdvanceBeatClock(0);
+            imitationRemaining = ImitationBeats;
+            imitationEndBeat = beatClock.Position + ImitationBeats;
             presentation.BeginImitation(target, body.sprite, !enemy.IsSpecial);
             grid.GetComponent<SoundEffects>()?.PlayCue(enemy.IsSpecial ? SoundEffect.YellowHide : SoundEffect.YellowTransform);
             presentation.Tick(0, enemy.Color, 0);
@@ -390,7 +385,7 @@ namespace CandyCruisers
             shieldPowerRemaining = 0;
             if (shield != null) shield.enabled = false;
             if (body != null && enemy != null) body.color = EnemyPalette.Get(enemy.Color);
-            castRemaining = burstRemaining = 0;
+            castRemaining = 0;
             imitationRemaining = 0;
             if (presentation != null) presentation.Clear();
         }
