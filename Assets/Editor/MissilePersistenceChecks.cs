@@ -1,11 +1,47 @@
 using System;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 
 namespace CandyCruisers.Editor
 {
     public static class MissilePersistenceChecks
     {
+        public static void RunInPlayMode()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene);
+            SessionState.SetBool("CandyCruisers.MissileClearChecks", true);
+            RestorePlayModeChecks();
+            EditorApplication.EnterPlaymode();
+        }
+
+        [InitializeOnLoadMethod]
+        private static void RestorePlayModeChecks()
+        {
+            if (SessionState.GetBool("CandyCruisers.MissileClearChecks", false))
+                EditorApplication.playModeStateChanged += OnPlayMode;
+        }
+
+        private static void OnPlayMode(PlayModeStateChange state)
+        {
+            if (state != PlayModeStateChange.EnteredPlayMode) return;
+            SessionState.SetBool("CandyCruisers.MissileClearChecks", false);
+            EditorApplication.playModeStateChanged -= OnPlayMode;
+            try { RunRelatedChecks(); EditorApplication.Exit(0); }
+            catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+        }
+
+        public static void RunRelatedChecks()
+        {
+            using var songs = new SongSelectionCheckSettings();
+            using var metronomes = new MetronomeCheckSettings();
+            Run();
+            MissileBoundaryChecks.Run();
+            MissileFlightSoundChecks.Run();
+            if (Application.isPlaying) WaveTransitionChecks.RunRefillDelayEnvelope();
+            else WaveTransitionChecks.Run();
+        }
+
         public static void Run()
         {
             foreach (bool special in new[] { false, true })
@@ -40,33 +76,40 @@ namespace CandyCruisers.Editor
                 missile.transform.position = player.transform.position + Vector3.up * 1.5f;
                 flight.Refresh();
                 TickUntilBeep(missile, flight);
-                var flightClip = flight.Source.clip;
-                Check(flightClip != null && !flight.Source.loop, "Both Red tiers beep on their first flash peak");
+                Check(flight.Source.clip != null && !flight.Source.loop, "Both Red tiers beep on their first flash peak");
                 grid.ClearMatchingChain(red.Id, EnemyColor.Red);
                 Check(missile != null && missile.isActiveAndEnabled && !missile.Finished && !missile.Suspended,
                     "Destroying shooter preserves its fired missile");
+                var beforeBursts = UnityEngine.Object.FindObjectsByType<MissileClearBurst>(FindObjectsSortMode.None);
+                var position = missile.transform.position;
                 grid.ClearMatchingChain(blue.Id, EnemyColor.Blue);
-                Check(session.State == GameSession.RunState.Refilling && missile.isActiveAndEnabled && !missile.Suspended,
-                    "Clearing the final enemy also preserves active bullets");
-                Check(flight.Source.clip == flightClip, "Destroying the shooter and clearing the fleet preserve its beep voice");
-                var before = missile.transform.position;
-                missile.Tick(.1f);
-                Check(missile.transform.position.y < before.y, "Missile continues moving during refill");
-                session.Pause();
-                before = missile.transform.position;
-                missile.Tick(1);
-                Check(missile.transform.position == before, "Pause still freezes surviving missiles");
-                Check(flight.Source.volume == 0 && !flight.Source.isPlaying && flight.Source.clip == null,
-                    "Pause silences surviving missile beeps");
-                session.Resume();
-                Check(!missile.Suspended, "Resume during refill releases surviving missiles");
-                // A surviving bullet must remain dangerous even with no enemies left.
-                missile.transform.position = player.transform.position - missile.transform.rotation * Vector3.down;
-                missile.Tick(1f);
-                Check(missile.Finished && !player.Alive && player.Lives == PlayerMovement.MaxLives - 1,
-                    "Surviving missile can hit the player during refill");
+                Check(session.State == GameSession.RunState.Refilling && missile.Finished && !missile.gameObject.activeSelf,
+                    "Clearing the final enemy immediately retires airborne missiles");
+                Check(!flight.Source.isPlaying && flight.Source.clip == null && flight.Source.volume == 0,
+                    "Wave clear immediately silences the missile voice");
+                var burst = UnityEngine.Object.FindObjectsByType<MissileClearBurst>(FindObjectsSortMode.None)
+                    .Single(candidate => !beforeBursts.Contains(candidate));
+                try
+                {
+                    Check(burst.transform.position == position && burst.transform.parent == null,
+                        "A detached explosion appears at the missile's final position");
+                    missile.ClearWithBurst();
+                    Check(UnityEngine.Object.FindObjectsByType<MissileClearBurst>(FindObjectsSortMode.None).Length == beforeBursts.Length + 1,
+                        "Repeated clearing cannot duplicate the explosion");
+                    missile.Tick(1);
+                    Check(missile.transform.position == position && player.Alive && player.Lives == PlayerMovement.MaxLives,
+                        "Cleared missiles cannot move or hurt the player during refill");
+                    var spark = burst.GetComponentInChildren<SpriteRenderer>();
+                    var initial = spark.transform.localPosition;
+                    burst.Tick(MissileClearBurst.Duration / 2);
+                    Check(!burst.Finished && spark.color.a > 0 && spark.color.a < 1 && spark.transform.localPosition != initial,
+                        "Explosion sparks expand and fade during their brief lifetime");
+                    burst.Tick(MissileClearBurst.Duration);
+                    Check(burst.Finished && !burst.gameObject.activeSelf, "Explosion cleans up after its animation");
+                }
+                finally { UnityEngine.Object.DestroyImmediate(burst.gameObject); }
             });
-            Debug.Log("Missile persistence checks passed: ordinary and aimed shooter death, fleet clear, continued travel, pause/resume and refill hits.");
+            Debug.Log("Missile persistence checks passed: ordinary and aimed shooter death, immediate wave-clear retirement, silent flight voices and brief detached explosions.");
         }
         private static void TickUntilBeep(EnemyMissile missile, MissileFlightSound flight)
         {

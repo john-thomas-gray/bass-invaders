@@ -1061,6 +1061,8 @@ namespace CandyCruisers
 
         private void BeginRefill()
         {
+            foreach (var missile in FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None))
+                missile.ClearWithBurst();
             if (CurrentLevelDefinition != null) musicPlayer?.UpdatePlayback();
             var reservation = spawner.PlanNextFleet();
             var plan = reservation?.OccupiedColors();

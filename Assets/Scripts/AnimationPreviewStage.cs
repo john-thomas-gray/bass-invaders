@@ -21,7 +21,7 @@ namespace CandyCruisers
             Idle, MenuArrival, Tongue, MagicTongue, ShieldDeflection, EnemySpawn,
             EnemyDeath, ColorClear, WaveTransition, LifeLoss, LifeGain, ComboBreak,
             GameOver, RedShot, GreenDash, PurpleSummon, YellowImitation, OrangeBurst, MissileGaze,
-            StartGame
+            StartGame, LevelTransitions
         }
 
         public static AnimationPreviewStage Instance { get; private set; }
@@ -182,7 +182,7 @@ namespace CandyCruisers
 
         private void Prepare()
         {
-            Session.StartLevel = Level;
+            Session.StartLevel = Selected == Animation.LevelTransitions ? 1 : Level;
             if (Selected == Animation.MenuArrival)
             {
                 if ((int)MenuEntrance < 0)
@@ -215,11 +215,18 @@ namespace CandyCruisers
             Grid.enabled = false;
             foreach (var frame in FindObjectsByType<PlayfieldFrame>(FindObjectsSortMode.None)) frame.Tick(10);
             Camera.main.GetComponent<GameplayFraming>().TickBackground(10);
-            Add(Color, 2, 1);
+            if (Selected != Animation.LevelTransitions) Add(Color, 2, 1);
             Player.RefreshColor();
             Grid.GetComponent<EnemyGridMovement>().enabled = false;
             switch (Selected)
             {
+                case Animation.LevelTransitions:
+                    At(2, () => Session.Progress.Reset(2));
+                    At(6, () => Session.Progress.Reset(3));
+                    At(10, () => Session.Progress.Reset(4));
+                    At(14, () => Session.Progress.Reset(5));
+                    ScenarioSeconds = 18;
+                    break;
                 case Animation.Idle:
                     Add(OtherColor, 4, 2);
                     foreach (var color in Enum.GetValues(typeof(EnemyColor)).Cast<EnemyColor>()

@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "levels": {
     "1": {
-      "backgroundImage": "",
+      "backgroundImage": "bg-level-1",
       "possibleSoundtrackTracks": [],
       "fleets": [
         {
@@ -84,7 +84,7 @@
       ]
     },
     "2": {
-      "backgroundImage": "bg-l2-stars",
+      "backgroundImage": "bg-level-2",
       "possibleSoundtrackTracks": [],
       "fleets": [
         {
@@ -152,7 +152,7 @@
       ]
     },
     "3": {
-      "backgroundImage": "",
+      "backgroundImage": "bg-level-3",
       "possibleSoundtrackTracks": [],
       "fleets": [
         {
@@ -232,7 +232,7 @@
       ]
     },
     "4": {
-      "backgroundImage": "",
+      "backgroundImage": "bg-level-4",
       "possibleSoundtrackTracks": [],
       "fleets": [
         {
@@ -326,7 +326,7 @@
       ]
     },
     "5": {
-      "backgroundImage": "",
+      "backgroundImage": "bg-level-5",
       "possibleSoundtrackTracks": [],
       "fleets": [
         {

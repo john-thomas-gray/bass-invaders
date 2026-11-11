@@ -258,9 +258,17 @@ namespace CandyCruisers
         private bool OutsideField(Vector3 position) => position.y < BottomDespawnY ||
             (Mathf.Abs(position.x) > PlayerMovement.HalfWidth || (Homing || Aimed) && position.y > FallbackViewHeight / 2) && BeyondHearingRange();
 
+        public void ClearWithBurst()
+        {
+            if (Finished) return;
+            MissileClearBurst.Create(transform.position, GetComponent<SpriteRenderer>());
+            Finish();
+        }
+
         private void Finish()
         {
             Finished = true;
+            GetComponent<MissileFlightSound>()?.Refresh();
             gameObject.SetActive(false);
             if (Application.isPlaying) Destroy(gameObject);
         }

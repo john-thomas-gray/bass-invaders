@@ -53,6 +53,12 @@ namespace CandyCruisers
         private int displayedLevel = -1;
         private int appliedLevelBackground = -1;
         private float levelBackgroundFadeRemaining;
+        private float backgroundScrollRemaining;
+        public const float BackgroundScrollSeconds = 3f;
+        private Vector3 outgoingBackgroundPosition;
+        private Vector3 outgoingBackgroundScale;
+        private Color outgoingBackgroundColor;
+        private bool zoomToPlanet;
         private Material starColorMaterial;
         private int spinDirection = 1;
         private Color transitionFrom = Color.white;
@@ -182,6 +188,7 @@ namespace CandyCruisers
             {
                 displayedLevel = level;
                 levelBackgroundFadeRemaining = Mathf.Max(0, levelBackgroundFadeRemaining - seconds);
+                if (!session.IsPaused) backgroundScrollRemaining = Mathf.Max(0, backgroundScrollRemaining - seconds);
                 wavePulseRemaining = levelCrossFadeRemaining = 0;
                 Refresh();
                 return;
@@ -231,8 +238,24 @@ namespace CandyCruisers
             int level = session.Progress.Level;
             if (appliedLevelBackground != level)
             {
+                if (appliedLevelBackground > 0 && starBackground.enabled && image != null &&
+                    session.State != GameSession.RunState.MainMenu)
+                {
+                    EnsureCrossFadeBackground();
+                    crossFadeBackground.sprite = starBackground.sprite;
+                    crossFadeBackground.sharedMaterial = starBackground.sharedMaterial;
+                    crossFadeBackground.color = starBackground.color;
+                    crossFadeBackground.transform.position = starBackground.transform.position;
+                    crossFadeBackground.transform.rotation = starBackground.transform.rotation;
+                    crossFadeBackground.transform.localScale = starBackground.transform.localScale;
+                    outgoingBackgroundPosition = crossFadeBackground.transform.position;
+                    outgoingBackgroundScale = crossFadeBackground.transform.localScale;
+                    outgoingBackgroundColor = crossFadeBackground.color;
+                    zoomToPlanet = appliedLevelBackground == 3 && level == 4 || appliedLevelBackground == 4 && level == 5;
+                    backgroundScrollRemaining = BackgroundScrollSeconds;
+                }
                 appliedLevelBackground = level;
-                levelBackgroundFadeRemaining = level == 2 && image != null ? levelCrossFadeSeconds : 0;
+                levelBackgroundFadeRemaining = backgroundScrollRemaining <= 0 && level == 3 && image != null ? levelCrossFadeSeconds : 0;
             }
             starBackground.enabled = image != null;
             if (image == null) return;
@@ -282,7 +305,68 @@ namespace CandyCruisers
             // Fit the sprite's bounds even when its artist chose an off-center pivot.
             starBackground.transform.localScale = Vector3.one * (scale * pulseScale);
             starBackground.transform.position -= (Vector3)image.bounds.center * (scale * pulseScale);
+            if (backgroundScrollRemaining > 0 && crossFadeBackground != null)
+            {
+                // Both layers follow the same live tint, pulse and shared magic palette.
+                outgoingBackgroundColor = starBackground.color;
+                crossFadeBackground.sharedMaterial = starColorMaterial;
+                crossFadeBackground.color = outgoingBackgroundColor;
+                float progress = Mathf.SmoothStep(0, 1, 1 - backgroundScrollRemaining / BackgroundScrollSeconds);
+                if (zoomToPlanet)
+                {
+                    if (level == 5)
+                    {
+                        var smallPlanet = BackgroundPixelPoint(crossFadeBackground.sprite, new Vector2(802, 825));
+                        var largePlanet = BackgroundPixelPoint(image, new Vector2(1380, 800));
+                        var startAnchor = outgoingBackgroundPosition + Vector3.Scale(smallPlanet, outgoingBackgroundScale);
+                        var endAnchor = starBackground.transform.TransformPoint(largePlanet);
+                        var control = startAnchor + new Vector3(-2.5f, 3f, 0);
+                        var anchor = (1 - progress) * (1 - progress) * startAnchor +
+                            2 * (1 - progress) * progress * control + progress * progress * endAnchor;
+                        var incomingScale = starBackground.transform.localScale * Mathf.Lerp(1f / 12f, 1, progress);
+                        starBackground.transform.localScale = incomingScale;
+                        starBackground.transform.position = anchor - Vector3.Scale(largePlanet, incomingScale);
+                        var outgoingScale = outgoingBackgroundScale * Mathf.Lerp(1, 12, progress);
+                        crossFadeBackground.transform.localScale = outgoingScale;
+                        crossFadeBackground.transform.position = anchor - Vector3.Scale(smallPlanet, outgoingScale);
+                        float planetFade = 1 - Mathf.Pow(backgroundScrollRemaining / BackgroundScrollSeconds, 2);
+                        crossFadeBackground.color = outgoingBackgroundColor;
+                        starBackground.color = WithAlpha(starBackground.color, starBackground.color.a * planetFade);
+                        crossFadeBackground.enabled = true;
+                        return;
+                    }
+                    // Anchors are measured in pixels from the top-left of each 1080 x 1920 section.
+                    var starAnchor = BackgroundPixelPoint(crossFadeBackground.sprite, new Vector2(791, 832));
+                    var planetAnchor = BackgroundPixelPoint(image, new Vector2(802, 825));
+                    // Begin the curved approach early, settling at the authored framing.
+                    float curveProgress = Mathf.InverseLerp(.15f, 1f, progress);
+                    float curveOffset = .3f * Mathf.Pow(Mathf.Sin(Mathf.PI * curveProgress), 2);
+                    starBackground.transform.position += Vector3.left * curveOffset;
+                    var destination = starBackground.transform.TransformPoint(planetAnchor);
+                    var zoomScale = outgoingBackgroundScale * Mathf.Lerp(1, 4, progress);
+                    crossFadeBackground.transform.localScale = zoomScale;
+                    crossFadeBackground.transform.position = destination - Vector3.Scale(starAnchor, zoomScale);
+                    float elapsedFraction = Mathf.Clamp01(1 - backgroundScrollRemaining / BackgroundScrollSeconds);
+                    // Begin revealing the planet immediately, then ease gently into full opacity.
+                    float fadeProgress = 1 - Mathf.Pow(1 - elapsedFraction, 2);
+                    crossFadeBackground.color = WithAlpha(outgoingBackgroundColor, outgoingBackgroundColor.a * (1 - fadeProgress));
+                    starBackground.color = WithAlpha(starBackground.color, starBackground.color.a * fadeProgress);
+                    crossFadeBackground.enabled = true;
+                    return;
+                }
+                // Opaque adjoining slices avoid a dark alpha-blended seam; overlap one source texel.
+                starBackground.color = WithAlpha(starBackground.color, 1);
+                crossFadeBackground.color = WithAlpha(starBackground.color, 1);
+                float distance = (size.y - 1f / image.pixelsPerUnit) * scale * pulseScale;
+                starBackground.transform.position += Vector3.up * distance * (1 - progress);
+                crossFadeBackground.transform.position = outgoingBackgroundPosition - Vector3.up * distance * progress;
+                crossFadeBackground.enabled = true;
+            }
         }
+
+        private static Vector3 BackgroundPixelPoint(Sprite sprite, Vector2 pixel) =>
+            new Vector3((pixel.x - sprite.pivot.x) / sprite.pixelsPerUnit,
+                (sprite.rect.height - pixel.y - sprite.pivot.y) / sprite.pixelsPerUnit, 0);
 
         public void TriggerWaveSpawnEffect()
         {
