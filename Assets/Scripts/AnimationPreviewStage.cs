@@ -20,7 +20,7 @@ namespace CandyCruisers
         {
             Idle, MenuArrival, Tongue, MagicTongue, ShieldDeflection, EnemySpawn,
             EnemyDeath, ColorClear, WaveTransition, LifeLoss, LifeGain, ComboBreak,
-            GameOver, RedShot, GreenDash, PurpleSummon, YellowImitation, OrangeBurst, MissileGaze,
+            GameOver, RedShot, GreenTempo, PurpleSummon, YellowImitation, OrangeBurst, MissileGaze,
             StartGame, LevelTransitions
         }
 
@@ -158,7 +158,7 @@ namespace CandyCruisers
                 !(shotMotion || Selected == Animation.MissileGaze);
             Grid.enabled = false;
             Grid.RefreshSpecials();
-            Grid.GetComponent<EnemyGridMovement>().enabled = Selected == Animation.GreenDash ||
+            Grid.GetComponent<EnemyGridMovement>().enabled = Selected == Animation.GreenTempo ||
                 Selected == Animation.StartGame && Session.State == GameSession.RunState.Playing;
             while (nextCue < cues.Count && Elapsed >= cues[nextCue].time)
             {
@@ -295,7 +295,7 @@ namespace CandyCruisers
                     Grid.RefreshSpecials();
                     At(.5f, () => FireMissile(Grid.View(Grid.Model.At(2, 1).Id)));
                     break;
-                case Animation.GreenDash:
+                case Animation.GreenTempo:
                     ClearEnemies();
                     for (int row = 1; row <= 4; row++)
                         for (int i = 1; i <= 4; i++) Add(EnemyColor.Green, i, row);

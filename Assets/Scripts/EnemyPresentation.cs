@@ -61,13 +61,14 @@ namespace CandyCruisers
         public bool YellowRevealReturnActive => yellowRevealSprite != null &&
             yellowRevealAge + .0001f < yellowRevealArrivalSeconds + yellowRevealReturnSeconds;
         private float movementPulseRemaining;
+        private bool tempoArrow;
         public const float MovementPulseSeconds = .38f;
         private Transform movementArrow;
         private MeshRenderer[] movementArrowLayers;
         private MaterialPropertyBlock movementArrowTint;
         private EnemyGridMovement arrowFleet;
         private int movementArrowDirection = 1, arrowFleetDirection = 1;
-        private static Mesh movementArrowMesh;
+        private static Mesh movementArrowMesh, movementArrowGradientMesh;
         private static Material movementArrowMaterial;
         public const float SummonFlashSeconds = .42f;
         private float summonFlashRemaining;
@@ -94,6 +95,25 @@ namespace CandyCruisers
             movementPulseRemaining = MovementPulseSeconds;
             Tick(0, EnemyColor.Green, 0);
         }
+        public void TempoUp()
+        {
+            EnsureMovementArrow();
+            if (!tempoArrow) movementPulseRemaining = MovementPulseSeconds;
+            tempoArrow = true;
+            PresentMovementArrow(EnemyColor.Green);
+        }
+
+        public void TempoDown()
+        {
+            EnsureMovementArrow();
+            // The departing arrow lives independently of the destroyed enemy.
+            TempoUp();
+            var copy = Instantiate(movementArrow.gameObject, movementArrow.position, Quaternion.Euler(0, 0, -90));
+            copy.name = "Green tempo down arrow";
+            copy.transform.localScale = movementArrow.lossyScale;
+            GreenTempoFall.Create(copy, GetComponentInParent<GameplayMusicPlayer>()?.BeatDuration ?? AbilityBeatClock.DefaultBeatSeconds);
+        }
+
         private Quaternion restingRotation;
         private bool aimingApplied;
         public const float GreenSpinSeconds = .35f;
@@ -411,15 +431,28 @@ namespace CandyCruisers
             if (movementArrowMesh == null)
             {
                 movementArrowMesh = new Mesh { name = "Green rhythm arrow" };
-                movementArrowMesh.vertices = new[] {
-                    new Vector3(-.5f, -.17f), new Vector3(-.08f, -.17f), new Vector3(-.08f, -.4f),
-                    new Vector3(.5f, 0), new Vector3(-.08f, .4f), new Vector3(-.08f, .17f), new Vector3(-.5f, .17f)
+                // Chamfered dance-pad silhouette. Authored upward, then rotated to
+                // the right so movement, tempo-up and tempo-down share one graphic.
+                var outline = new[] {
+                    new Vector2(-.5f, -.06f), new Vector2(-.5f, .06f),
+                    new Vector2(-.016f, .5f), new Vector2(.016f, .5f),
+                    new Vector2(.5f, .06f), new Vector2(.5f, -.06f),
+                    new Vector2(.4f, -.16f), new Vector2(.25f, -.16f),
+                    new Vector2(.17f, -.08f), new Vector2(.17f, -.35f),
+                    new Vector2(.03f, -.5f), new Vector2(-.03f, -.5f),
+                    new Vector2(-.17f, -.35f), new Vector2(-.17f, -.08f),
+                    new Vector2(-.25f, -.16f), new Vector2(-.4f, -.16f)
                 };
-                movementArrowMesh.triangles = new[] { 0, 1, 5, 0, 5, 6, 2, 3, 4 };
-                movementArrowMesh.colors = new[] { Color.white, Color.white, Color.white, Color.white,
-                    Color.white, Color.white, Color.white };
-                movementArrowMesh.uv = new[] { new Vector2(0, .3f), new Vector2(.42f, .3f), new Vector2(.42f, 0),
-                    new Vector2(1, .5f), new Vector2(.42f, 1), new Vector2(.42f, .7f), new Vector2(0, .7f) };
+                var vertices = new Vector3[outline.Length];
+                var colors = new Color[outline.Length];
+                for (int i = 0; i < outline.Length; i++)
+                {
+                    vertices[i] = new Vector3(outline[i].y, -outline[i].x);
+                    colors[i] = Color.white;
+                }
+                movementArrowMesh.vertices = vertices;
+                movementArrowMesh.triangles = TriangulateArrow(vertices);
+                movementArrowMesh.colors = colors;
                 movementArrowMesh.RecalculateBounds();
             }
             if (movementArrowMaterial == null)
@@ -428,15 +461,28 @@ namespace CandyCruisers
             movementArrow.SetParent(GetComponent<GridEnemy>().Visuals.Root, false);
             arrowFleet = GetComponentInParent<EnemyGridMovement>();
             movementArrowTint = new MaterialPropertyBlock();
-            movementArrowLayers = new MeshRenderer[3];
-            string[] names = { "outline", "rim", "fill" };
-            float[] scales = { 1.12f, 1, .8f };
+            movementArrowLayers = new MeshRenderer[4];
+            string[] names = { "outline", "blue rim", "white inset", "blue core" };
+            float[] scales = { 1.12f, 1, .78f, .53f };
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
                 var child = new GameObject("Green arrow " + names[i], typeof(MeshFilter), typeof(MeshRenderer));
                 child.transform.SetParent(movementArrow, false);
                 child.transform.localScale = Vector3.one * scales[i];
                 child.GetComponent<MeshFilter>().sharedMesh = movementArrowMesh;
+                if (i == 1 || i == 3)
+                {
+                    if (movementArrowGradientMesh == null)
+                    {
+                        movementArrowGradientMesh = Instantiate(movementArrowMesh);
+                        var colors = new Color[movementArrowGradientMesh.vertexCount];
+                        for (int v = 0; v < colors.Length; v++)
+                            colors[v] = Color.Lerp(new Color(0, .78f, .96f), new Color(.2f, .27f, .62f),
+                                movementArrowGradientMesh.vertices[v].x + .5f);
+                        movementArrowGradientMesh.colors = colors;
+                    }
+                    child.GetComponent<MeshFilter>().sharedMesh = movementArrowGradientMesh;
+                }
                 var renderer = movementArrowLayers[i] = child.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = movementArrowMaterial;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -447,43 +493,80 @@ namespace CandyCruisers
             }
         }
 
+        private static int[] TriangulateArrow(Vector3[] vertices)
+        {
+            var remaining = new System.Collections.Generic.List<int>();
+            var triangles = new System.Collections.Generic.List<int>();
+            // The outline is clockwise. Clip convex ears, excluding concave notches.
+            for (int i = 0; i < vertices.Length; i++) remaining.Add(i);
+            while (remaining.Count > 2)
+            {
+                bool clipped = false;
+                for (int i = 0; i < remaining.Count; i++)
+                {
+                    int a = remaining[(i + remaining.Count - 1) % remaining.Count];
+                    int b = remaining[i], c = remaining[(i + 1) % remaining.Count];
+                    if (Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[b]).z >= 0) continue;
+                    bool contains = false;
+                    foreach (int v in remaining)
+                    {
+                        if (v == a || v == b || v == c) continue;
+                        if (Vector3.Cross(vertices[b] - vertices[a], vertices[v] - vertices[a]).z <= 0 &&
+                            Vector3.Cross(vertices[c] - vertices[b], vertices[v] - vertices[b]).z <= 0 &&
+                            Vector3.Cross(vertices[a] - vertices[c], vertices[v] - vertices[c]).z <= 0)
+                        { contains = true; break; }
+                    }
+                    if (contains) continue;
+                    triangles.Add(a); triangles.Add(b); triangles.Add(c);
+                    remaining.RemoveAt(i);
+                    clipped = true;
+                    break;
+                }
+                if (!clipped) throw new System.InvalidOperationException("Invalid rhythm arrow outline");
+            }
+            return triangles.ToArray();
+        }
+
         private void RefreshMovementArrowDirection()
         {
             if (movementArrow == null) return;
             // Follow a reversal during the pulse while retaining explicit preview directions.
-            if (arrowFleet != null && arrowFleet.Direction != arrowFleetDirection)
+            if (!tempoArrow && arrowFleet != null && arrowFleet.Direction != arrowFleetDirection)
                 movementArrowDirection = arrowFleetDirection = arrowFleet.Direction;
-            movementArrow.rotation = Quaternion.Euler(0, 0, movementArrowDirection < 0 ? 180 : 0);
+            movementArrow.rotation = Quaternion.Euler(0, 0, tempoArrow ? 90 : movementArrowDirection < 0 ? 180 : 0);
         }
 
         private void LateUpdate()
         {
             // Resolve placement after fleet movement and the actor's beat-scale animation.
-            if (movementArrow != null && movementPulseRemaining > 0)
+            if (movementArrow != null && (movementPulseRemaining > 0 || tempoArrow))
                 PresentMovementArrow(GetComponent<GridEnemy>().Color);
         }
 
         private void PresentMovementArrow(EnemyColor color)
         {
             if (movementArrow == null) return;
-            bool active = color == EnemyColor.Green && movementPulseRemaining > 0;
+            bool active = color == EnemyColor.Green && (movementPulseRemaining > 0 || tempoArrow);
             foreach (var renderer in movementArrowLayers) renderer.enabled = active;
             if (!active) return;
             RefreshMovementArrowDirection();
             float progress = 1 - movementPulseRemaining / MovementPulseSeconds;
-            float width = Mathf.Clamp(Mathf.Max(body.bounds.size.x, body.bounds.size.y) * 1.8f, 1.05f, 1.35f) *
-                (1 + .12f * Mathf.Sin(progress * Mathf.PI));
+            float width = Mathf.Clamp(Mathf.Max(body.bounds.size.x, body.bounds.size.y) * 1.8f, 1.05f, 1.35f);
+            if (tempoArrow)
+                width = Mathf.Min(width, (GetComponentInParent<EnemyGrid>()?.Spacing ?? .75f) * .78f);
+            width *= 1 + .12f * Mathf.Sin(progress * Mathf.PI);
             var parentScale = movementArrow.parent.lossyScale;
             movementArrow.localScale = new Vector3(width / Mathf.Max(.001f, Mathf.Abs(parentScale.x)),
                 width / Mathf.Max(.001f, Mathf.Abs(parentScale.y)), 1);
-            var center = body.bounds.center + Vector3.right * movementArrowDirection * .09f * Mathf.SmoothStep(0, 1, progress);
+            var center = body.bounds.center + (tempoArrow ? Vector3.up * (body.bounds.extents.y + width * .57f) :
+                Vector3.right * movementArrowDirection * .09f * Mathf.SmoothStep(0, 1, progress));
             float edge = PlayerMovement.HalfWidth - width * .56f - .025f;
             center.x = Mathf.Clamp(center.x, -edge, edge);
             movementArrow.position = center;
-            float fade = Mathf.Clamp01(movementPulseRemaining / .14f);
+            float fade = tempoArrow ? 1 : Mathf.Clamp01(movementPulseRemaining / .14f);
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
-                var tint = i == 0 ? new Color(.025f, .13f, .08f) : i == 1 ? Color.white : new Color(.15f, 1, .45f);
+                var tint = i == 0 ? new Color(.13f, .12f, .12f) : Color.white;
                 tint.a = fade;
                 movementArrowTint.SetColor("_Color", tint);
                 movementArrowLayers[i].SetPropertyBlock(movementArrowTint);
@@ -521,6 +604,7 @@ namespace CandyCruisers
             growing = false;
             if (greenSpinRemaining > 0 && body != null) body.transform.localRotation = greenRestingRotation;
             greenSpinRemaining = 0;
+            tempoArrow = false;
             if (aimingApplied && body != null) body.transform.localRotation = restingRotation;
             aimingApplied = false;
             phaseRemaining = shiftRemaining = imitationRemaining = revealRemaining = movementPulseRemaining = summonFlashRemaining = dashRemaining = 0;

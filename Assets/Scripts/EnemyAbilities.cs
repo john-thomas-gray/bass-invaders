@@ -59,11 +59,13 @@ namespace CandyCruisers
             shieldPowerRemaining = awaitingSpawnShield ? ShieldPowerSeconds : 0;
             RefreshShield();
         }
-        private bool wasGreenDasher;
-        private bool GreenDashes => enemy != null && enemy.Color == EnemyColor.Green &&
-            (enemy.IsSpecial || grid.GetComponent<EnemyGridMovement>()?.UseGreenDashes == true);
+        private bool wasGreenCaster;
+        private bool greenTempoTriggered;
+        public bool GreenTempoActive => greenTempoTriggered && enemy != null && enemy.IsSpecial && enemy.Color == EnemyColor.Green;
+        private bool CanCastGreen => enemy != null && enemy.Color == EnemyColor.Green &&
+            (enemy.IsSpecial ? !greenTempoTriggered : grid.GetComponent<EnemyGridMovement>()?.UseGreenDashes == true);
         public bool Warning => enemy != null && enemy.Color != EnemyColor.Blue &&
-            (enemy.Color != EnemyColor.Green || GreenDashes) && (cooldown <= .45f || IsCasting);
+            (enemy.Color != EnemyColor.Green || CanCastGreen) && (cooldown <= .45f || IsCasting);
         public Bounds ShieldBounds => new Bounds(enemy.HitBounds.center, enemy.HitBounds.size * 1.25f);
         public void BeginSpawnEffect(EnemyColor? effectColor = null, bool warp = false)
         {
@@ -81,6 +83,7 @@ namespace CandyCruisers
 
         public void Configure(GridEnemy owner, GameObject projectile, Sprite shieldSprite)
         {
+            bool retainGreenTempo = enemy == owner && GreenTempoActive;
             enemy = owner;
             missilePrefab = projectile;
             body = enemy.Visuals.Body;
@@ -100,6 +103,8 @@ namespace CandyCruisers
                 shield.sortingOrder = body.sortingOrder + 1;
             }
             ResetAbility();
+            greenTempoTriggered = retainGreenTempo;
+            if (GreenTempoActive) presentation.TempoUp();
         }
 
         private void ResetAbility()
@@ -115,8 +120,9 @@ namespace CandyCruisers
             awaitingSpawnShield = false;
             shieldPowerRemaining = 0;
             shieldSpent = false;
+            greenTempoTriggered = false;
             ScheduleCooldown();
-            wasGreenDasher = GreenDashes;
+            wasGreenCaster = CanCastGreen;
             if (shield != null && shield.sprite != null)
                 shieldFullScale = Vector3.one *
                     (Mathf.Max(body.sprite.bounds.size.x, body.sprite.bounds.size.y) * 1.25f / shield.sprite.bounds.size.x);
@@ -146,8 +152,8 @@ namespace CandyCruisers
             if (Suspended || enemy == null || !isActiveAndEnabled) return;
             AdvanceBeatClock(seconds);
             if (currentColor != enemy.Color) ResetAbility();
-            if (GreenDashes && !wasGreenDasher) ScheduleCooldown();
-            wasGreenDasher = GreenDashes;
+            if (CanCastGreen && !wasGreenCaster) ScheduleCooldown();
+            wasGreenCaster = CanCastGreen;
             seconds = Mathf.Max(0, seconds);
             if (IsDisguised)
             {
@@ -186,8 +192,8 @@ namespace CandyCruisers
                 awaitingSpawnShield = false;
                 if (shieldPowerRemaining > 0) grid.GetComponent<SoundEffects>()?.PlayCue(SoundEffect.ShieldPower);
             }
-            if (!GreenDashes && enemy.Color == EnemyColor.Green) castRemaining = burstRemaining = 0;
-            if (burstRemaining > 0 && GreenDashes)
+            if (!CanCastGreen && enemy.Color == EnemyColor.Green) castRemaining = burstRemaining = 0;
+            if (burstRemaining > 0 && CanCastGreen && !enemy.IsSpecial)
             {
                 float used = Mathf.Min(seconds, burstRemaining);
                 burstRemaining -= used;
@@ -196,7 +202,6 @@ namespace CandyCruisers
                 presentation.SetDashDirection(transform.position.x - before);
                 if (Suspended || !isActiveAndEnabled) return;
             }
-            bool startGreenSpin = false;
             bool startSummonFlash = false;
             if (IsCasting)
             {
@@ -205,7 +210,6 @@ namespace CandyCruisers
                     castRemaining = 0;
                     startSummonFlash = CompleteCast();
                     ScheduleCooldown(enemy.Color == EnemyColor.Purple && !startSummonFlash);
-                    startGreenSpin = enemy.Color == EnemyColor.Green && enemy.IsSpecial;
                 }
             }
             var player = enemy.Color == EnemyColor.Red ? FindFirstObjectByType<PlayerMovement>() : null;
@@ -234,7 +238,7 @@ namespace CandyCruisers
                 grid.GetComponent<SoundEffects>()?.PlayCue(SoundEffect.ShieldPower);
                 shieldSeconds = Mathf.Max(0, -cooldown);
             }
-            else if (enemy.Color >= EnemyColor.Green && (enemy.Color != EnemyColor.Green || GreenDashes) && beatClock.Reached(cooldownBeat) && !IsCasting)
+            else if (enemy.Color >= EnemyColor.Green && (enemy.Color != EnemyColor.Green || CanCastGreen) && beatClock.Reached(cooldownBeat) && !IsCasting)
             {
                 ScheduleCooldown();
                 if (enemy.Color == EnemyColor.Yellow)
@@ -262,9 +266,8 @@ namespace CandyCruisers
                 else { castRemaining = 1; castBeat = beatClock.AfterBeats(1); }
             }
             RefreshVisuals();
+            if (GreenTempoActive) presentation.TempoUp();
             presentation.Tick(seconds, enemy.Color, Warning ? 1 : 0);
-            // Start after the presentation tick so the completed windup cannot consume the new spin.
-            if (startGreenSpin) presentation.DashGreen(grid.GetComponent<EnemyGridMovement>().Direction);
             if (startSummonFlash) presentation.SummonFlash();
             if (awaitingSpawnShield && !presentation.IsPhasing)
             {
@@ -282,8 +285,13 @@ namespace CandyCruisers
 
         private bool CompleteCast()
         {
-            if (enemy.Color == EnemyColor.Green && GreenDashes)
+            if (enemy.Color == EnemyColor.Green && CanCastGreen)
             {
+                if (enemy.IsSpecial)
+                {
+                    greenTempoTriggered = true;
+                    return false;
+                }
                 burstRemaining = .18f;
                 var movement = grid.GetComponent<EnemyGridMovement>();
                 foreach (var visual in grid.GetComponentsInChildren<EnemyPresentation>()) visual.SpeedShift(movement.Direction);

@@ -88,9 +88,10 @@ namespace CandyCruisers.Editor
                 Check(green.Visuals.Body.color != resting, "Selected Green visibly flashes");
                 var arrow = green.Visuals.Root.Find("Green movement arrow");
                 var layers = arrow.GetComponentsInChildren<MeshRenderer>();
-                Check(layers.Length == 3 && layers.All(layer => layer.enabled &&
-                    layer.GetComponent<MeshFilter>().sharedMesh == layers[0].GetComponent<MeshFilter>().sharedMesh),
-                    "A large filled rhythm arrow uses shared geometry for its outline, white rim and green fill");
+                Check(layers.Length == 4 && layers.All(layer => layer.enabled) &&
+                    layers[0].GetComponent<MeshFilter>().sharedMesh == layers[2].GetComponent<MeshFilter>().sharedMesh &&
+                    layers[1].GetComponent<MeshFilter>().sharedMesh == layers[3].GetComponent<MeshFilter>().sharedMesh,
+                    "Dance arrow shares silhouette and gradient meshes across its black, blue and white layers");
                 Check(layers[0].bounds.size.x > green.Visuals.Body.bounds.size.x * 1.5f &&
                     arrow.TransformDirection(Vector3.right).x > .99f,
                     "The arrow is larger than the Green and initially points right");

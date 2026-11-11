@@ -268,40 +268,41 @@ remaining visual transition finishes as a disguise rather than a conversion.
 
 ## Green: Count-Based Movement
 
-Default average movement is `0.015 * liveGreenCount * levelSpeedMultiplier`
+Default average movement is `0.015 * liveRegularGreenCount * levelSpeedMultiplier`
 world units per second at a constant tempo. There is no movement with zero Greens, including the Red/Blue-only
 opening. Counts are read from the live grid, including Yellow conversions.
 Movement is spent only on song counts two and four. Each tick retains the
-original single-beat distance, using the configured `0.03 * liveGreenCount *
+original single-beat distance, using the configured `0.03 * liveRegularGreenCount *
 levelSpeedMultiplier` rate multiplied by the completed beat duration. Skipping
 counts one and three halves average travel. If a long frame crosses multiple
 beats, later movement ticks use any updated Green count.
 
-Tier-two Greens add the retained fast-forward dash: individual 0.1-unit bursts
-over 0.18 seconds, preceded by a 0.6-second flashing warning and fleet-wide
-speed-wake visuals. On activation, only the activating special Green's body
-spins one full turn over 0.35 seconds, then restores its resting orientation.
-The spin pauses with gameplay, clears on color changes or disabling, and never
-changes grid placement, hitboxes, or dash distance. Ordinary Greens, including
-those using the legacy dash option, do not spin.
-Each samples a fresh 6-9-second cooldown on promotion and
-after activation, subject to level scaling. Promotion cannot immediately release
-an overdue ordinary-enemy timer. Both tiers still contribute to count-based speed;
-ordinary Greens do not cast or dash.
+Tier-two Greens never contribute to count-based fleet movement or dash. Promotion
+starts their ability cooldown; promotion itself does not change tempo. When the
+one-beat windup completes, each special raises the shared gameplay and music
+tempo by 3%. Each special can activate only once, and its boost lasts while it
+remains an active special Green. The track keeps its current playback position.
 
-`EnemyGridMovement.UseGreenDashes` remains as an optional legacy switch, false
-by default. Enabling it restores nonzero base movement and allows ordinary
-Greens to dash too; upgraded Greens do not require this switch.
+Regular movement pulses and special tempo indicators share a chamfered,
+black-outlined dance-pad arrow with blue gradient and white insets. Regular
+arrows follow horizontal fleet direction and fade after a pulse. An activated
+special's arrow points up and stays above that enemy. Specials do not spin or
+show fleet-wide speed wakes.
 
-Both normal travel and bursts use `EnemyGridMovement.AdvanceDistance`, including
-occupied-column edge detection, exact contact, direction reversal, descent,
-new rows, reindexing, and game-over guards. Removing a Green cancels any
-unspent burst; suspending the run stops its timer and movement contribution.
+When Greens are cleared, detached down arrows fall and fade over one beat.
+Lost tempo boosts ease down together over one beat rather than changing speed
+instantly. Pause freezes the decrease and arrows. Transforming or removing an
+activated special also removes its boost with the same easing.
+
+`EnemyGridMovement.UseGreenDashes` remains an optional legacy switch, false by
+default, for base travel and ordinary Green dashes. It never gives special Greens
+a dash. Normal travel and legacy bursts use `EnemyGridMovement.AdvanceDistance`,
+including occupied-column edge detection, contact, reversal, descent and spawning.
 
 ## Shared Difficulty Scaling
 
 Starting cooldown ranges are Red 2.25-7.5 seconds, Blue recharge 2.25-7.5,
-special/legacy Green dashes 6-9, Purple 6-9, and Yellow 1.5-4.5. Each enemy independently resamples its
+special Green activation / legacy Green dashes 6-9, Purple 6-9, and Yellow 1.5-4.5. Each enemy independently resamples its
 interval after activation. Ordinary Blue starts unshielded, with its initial
 cooldown counting from spawn. Only after that cooldown expires does its shield
 power up for 0.35 seconds; it cannot protect or render during the spawn rift.
@@ -319,7 +320,7 @@ older, stronger Purple/Yellow cooldown scaling.
 
 Fleet base speed increases by 3% of its initial value per level, capped at twice
 the initial speed. With the default average 0.015 units/second per Green, level 6 moves at 0.01725 per Green.
-Green's 0.1-unit burst remains separate and does not grow with level.
+The legacy ordinary Green's 0.1-unit burst remains separate and does not grow with level.
 `CombatBalance` centralizes these tuning values. Basic and special abilities
 have separate tuning entries, selected from the enemy's actual tier whenever
 a cooldown is sampled. Both entries currently retain the same values and share

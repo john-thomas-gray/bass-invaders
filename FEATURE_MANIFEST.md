@@ -866,3 +866,10 @@ reference for individual rules and original limitations.
 - [x] Minimal main menu with a larger beat-pulsing BASS INVADERS title, THE RHYTHM IS OUT THERE subtitle, and saturated beat-colored perched character matching its gameplay size.
 - [x] Tap/click anywhere or press Enter to fade the title and float the character into position before gameplay.
 - [x] Flat-bottom slime placeholder with a planted base, upper-body jelly deformation and following eyes; movement and beat pulses preserve the grounded base and collision bounds.
+
+## Green Tempo And Rhythm Arrows
+- [x] Exclude special Greens from ordinary movement counts and pulse rotation.
+- [x] Raise tempo by 3% per special only when its ability completes; allow one activation per special.
+- [x] Share a chamfered dance-pad arrow with black outline, blue gradient and white insets; keep activated specials' up arrows overhead.
+- [x] Ease removed boosts down over one beat and animate detached down arrows when Greens are cleared.
+- [x] Preserve pause behavior and validate desktop layouts and the native iPhone simulator.

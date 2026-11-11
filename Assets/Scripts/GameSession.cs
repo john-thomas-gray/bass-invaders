@@ -43,9 +43,11 @@ namespace CandyCruisers
         private float previousTimeScale = 1;
         private float appliedTempoMultiplier = 1;
         private float deathTempoMultiplier = 1;
+        private float greenTempoMultiplier = 1, greenTempoTarget = 1, greenTempoStart = 1;
+        private float greenTempoElapsed, greenTempoDuration;
         public float TempoMultiplier => isActiveAndEnabled && !PresentationPreview && !OpeningWarningActive &&
             (State == RunState.Playing || State == RunState.Refilling) ?
-            1 + CombatBalance.SpecialGreenTempoIncrease * ((grid != null ? grid : GetComponent<EnemyGrid>())?.SpecialGreenCount ?? 0) : 1;
+            greenTempoMultiplier : 1;
         public float MusicTempoMultiplier => State == RunState.Dying ? deathTempoMultiplier : TempoMultiplier;
         private int inputBlockedThrough = -1;
         private bool started;
@@ -467,6 +469,9 @@ namespace CandyCruisers
         public void StartRun()
         {
             if (State != RunState.MainMenu) return;
+            greenTempoMultiplier = greenTempoTarget = greenTempoStart = 1;
+            greenTempoElapsed = 0;
+            RefreshGameplayTempo();
             MetronomeMenuOpen = false;
             SongSelection.Close();
             LoadLevelMap();
@@ -506,6 +511,30 @@ namespace CandyCruisers
             BeginBatch(spawner.PlanNextFleet(),
                 musicPlayer != null ? musicPlayer.SecondsForBeats(1) : CurrentBeatDuration);
         }
+        private void TickGreenTempo(float seconds)
+        {
+            float target = 1 + CombatBalance.SpecialGreenTempoIncrease *
+                ((grid != null ? grid : GetComponent<EnemyGrid>())?.ActiveGreenTempoCount ?? 0);
+            if (!Mathf.Approximately(target, greenTempoTarget))
+            {
+                // A fresh activation still raises tempo while earlier losses are easing out.
+                if (target > greenTempoTarget)
+                    greenTempoMultiplier = Mathf.Min(1 + CombatBalance.SpecialGreenTempoIncrease * GridModel.Columns * GridModel.Rows,
+                        greenTempoMultiplier + target - greenTempoTarget);
+                greenTempoTarget = target;
+                greenTempoStart = greenTempoMultiplier;
+                greenTempoElapsed = 0;
+                greenTempoDuration = Mathf.Max(.0001f, CurrentBeatDuration);
+                if (target >= greenTempoMultiplier) greenTempoMultiplier = target;
+            }
+            if (greenTempoMultiplier > greenTempoTarget && !IsPaused && !SongSelection.IsOpen)
+            {
+                greenTempoElapsed += Mathf.Max(0, seconds);
+                greenTempoMultiplier = Mathf.Lerp(greenTempoStart, greenTempoTarget,
+                    Mathf.SmoothStep(0, 1, greenTempoElapsed / greenTempoDuration));
+            }
+        }
+
         private void RefreshGameplayTempo()
         {
             // Edit-mode previews and checks must not rewrite the project's time settings.
@@ -907,6 +936,7 @@ namespace CandyCruisers
 
         public void Tick(float seconds)
         {
+            TickGreenTempo(seconds);
             RefreshGameplayTempo();
             if (IsPaused || SongSelection.IsOpen) return;
             if (OpeningWarningActive)

@@ -21,7 +21,7 @@ time so a short cycle setting cannot cut off its later examples.
 Presets cover idle beat pulses, title arrival, ordinary and magic tongue,
 shield deflection, enemy arrival and death, color-clear dust, wave transition,
 life loss and gain, combo break, the full game-over sequence, Red shots,
-Green spin and dash, Purple summon, Yellow imitation, Orange burst, and
+Green tempo arrows, Purple summon, Yellow imitation, Orange burst, and
 missile-following eyes.
 
 - Menu Arrival ends on the idle menu. Start Game starts there and holds on gameplay afterward.

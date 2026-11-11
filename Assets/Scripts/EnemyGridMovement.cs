@@ -24,7 +24,7 @@ namespace CandyCruisers
         private int lastMovementBeat = int.MinValue;
         public int Direction { get; private set; } = 1;
         public float CurrentSpeed => speed * CombatBalance.FleetSpeedMultiplier(GetComponent<GameSession>()?.Progress.Level ?? 1)
-            * (useGreenDashes ? 1 : .1f * GetComponent<EnemyGrid>().Fleet.ColorCount(EnemyColor.Green));
+            * (useGreenDashes ? 1 : .1f * GetComponent<EnemyGrid>().RegularGreenCount);
         public event System.Action SweepEnded;
 
         private void Awake() => Initialize();
@@ -109,7 +109,7 @@ namespace CandyCruisers
                 if (currentSpeed <= 0 || !grid.OccupiedHorizontalBounds(out float left, out float right) ||
                     right - left >= 2f * PlayerMovement.HalfWidth)
                 {
-                    if (grid.Fleet.ColorCount(EnemyColor.Green) == 0 || grid.Fleet.Count == 0)
+                    if (grid.RegularGreenCount == 0 || grid.Fleet.Count == 0)
                     {
                         greenOrder.Clear();
                         pulsedGreens.Clear();
@@ -162,7 +162,7 @@ namespace CandyCruisers
             for (int column = 0; column < GridModel.Columns; column++)
             {
                 var enemy = grid.Model.At(column, row);
-                if (enemy == null || enemy.Color != EnemyColor.Green) continue;
+                if (enemy == null || enemy.Color != EnemyColor.Green || grid.View(enemy.Id)?.IsSpecial == true) continue;
                 liveGreens.Add(enemy.Id);
                 if (!pulsedGreens.Contains(enemy.Id) && !greenOrder.Contains(enemy.Id)) greenOrder.Add(enemy.Id);
             }
@@ -175,7 +175,7 @@ namespace CandyCruisers
                 for (int column = 0; column < GridModel.Columns; column++)
                 {
                     var enemy = grid.Model.At(column, row);
-                    if (enemy != null && enemy.Color == EnemyColor.Green) greenOrder.Add(enemy.Id);
+                    if (enemy != null && enemy.Color == EnemyColor.Green && grid.View(enemy.Id)?.IsSpecial != true) greenOrder.Add(enemy.Id);
                 }
             }
             if (greenOrder.Count == 0) return;
@@ -190,7 +190,7 @@ namespace CandyCruisers
         {
             Initialize();
             if (!enabled || remaining < 0 || double.IsNaN(remaining) || double.IsInfinity(remaining)) return;
-            if (!useGreenDashes && grid.Fleet.ColorCount(EnemyColor.Green) == 0) return;
+            if (!useGreenDashes && grid.RegularGreenCount == 0) return;
             int version = resetVersion;
             while (remaining >= 0 && enabled && version == resetVersion)
             {
@@ -211,7 +211,7 @@ namespace CandyCruisers
                 if (remaining <= 0) return;
                 // A callback may spawn, reindex, end the run, or reset the fleet.
                 // Re-read occupancy before spending the frame's remaining movement.
-                if (!useGreenDashes && grid.Fleet.ColorCount(EnemyColor.Green) == 0) return;
+                if (!useGreenDashes && grid.RegularGreenCount == 0) return;
             }
         }
 

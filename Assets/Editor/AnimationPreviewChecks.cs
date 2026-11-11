@@ -23,7 +23,7 @@ namespace CandyCruisers.Editor
         private static bool observing;
         private static int magicShots, deflections, clears, returns;
         private static Color? returnTint;
-        private static bool sawQuietDash, sawWaveGain, sawDisguiseHold;
+        private static bool sawGreenTempo, sawWaveGain, sawDisguiseHold;
         private static string fleetBefore;
         private static int introPreference;
         private static bool hadIntroPreference;
@@ -90,7 +90,7 @@ namespace CandyCruisers.Editor
                 if (!observing)
                 {
                     observing = true; magicShots = deflections = clears = returns = 0; returnTint = null;
-                    sawQuietDash = sawWaveGain = sawDisguiseHold = false;
+                    sawGreenTempo = sawWaveGain = sawDisguiseHold = false;
                     menuEntrances.Clear();
                     if (stage.Selected == AnimationPreviewStage.Animation.LifeGain)
                     {
@@ -137,12 +137,12 @@ namespace CandyCruisers.Editor
                     stage.Session.MenuTitleIntroElapsed >= MenuIntroAnimation.CharacterStart &&
                     stage.Session.MenuTitleIntroElapsed < MenuIntroAnimation.Duration)
                     menuEntrances.Add(stage.Session.MenuEntrance);
-                if (stage.Selected == AnimationPreviewStage.Animation.GreenDash)
+                if (stage.Selected == AnimationPreviewStage.Animation.GreenTempo)
                     foreach (var enemy in stage.Grid.GetComponentsInChildren<GridEnemy>())
                     {
-                        var lines = enemy.GetComponentsInChildren<LineRenderer>();
-                        sawQuietDash |= lines.Any(line => line.name.StartsWith("Green dash trail") && line.enabled) &&
-                            !lines.Any(line => line.name.StartsWith("Green surge") && line.enabled);
+                        sawGreenTempo |= enemy.GetComponent<EnemyAbilities>()?.GreenTempoActive == true &&
+                            enemy.GetComponentsInChildren<MeshRenderer>().Any(renderer => renderer.enabled &&
+                                Vector3.Dot(renderer.transform.parent.right, Vector3.up) > .99f);
                     }
                 sawWaveGain |= stage.Player.LifeIcons.Gain.Visible && stage.Session.ClearCelebration.Active;
                 if (stage.Selected == AnimationPreviewStage.Animation.YellowImitation)
@@ -187,8 +187,8 @@ namespace CandyCruisers.Editor
                     Check(stage.ShotsFired == 5 && deflections == 5, "All five shot contexts hit the live shield");
                 if (stage.Selected == AnimationPreviewStage.Animation.PurpleSummon)
                     Check(stage.SummonsShown == 6, "Purple summons all six colors through the real spawner");
-                if (stage.Selected == AnimationPreviewStage.Animation.GreenDash)
-                    Check(sawQuietDash, "Special Green actually dashes separately from its regular movement surge");
+                if (stage.Selected == AnimationPreviewStage.Animation.GreenTempo)
+                    Check(sawGreenTempo, "Special Green activates a persistent upward tempo arrow");
                 if (stage.Selected == AnimationPreviewStage.Animation.YellowImitation)
                     Check(stage.ImitationsShown == 18 && sawDisguiseHold,
                         "Regular and special Yellows repeat across all eligible target variants and retain their finished disguises");

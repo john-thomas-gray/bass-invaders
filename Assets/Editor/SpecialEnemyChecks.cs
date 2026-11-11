@@ -367,17 +367,17 @@ namespace CandyCruisers.Editor
                 grid.RefreshSpecials();
                 ability.Tick(0);
                 Check(!ability.IsCasting && !ability.Warning, "Promotion starts a fresh cooldown instead of releasing an overdue dash");
-                Check(Mathf.Abs(movement.CurrentSpeed - .09f) < .001f, "Special Greens still contribute normal count-based movement");
+                Check(movement.CurrentSpeed == 0, "Special Greens do not contribute count-based movement");
                 for (int i = 0; i < 160 && !ability.IsCasting; i++) ability.Tick(.1f);
-                Check(ability.IsCasting && ability.Warning && grid.transform.position == Vector3.zero, "Special Green warns before its dash");
+                Check(ability.IsCasting && ability.Warning && grid.transform.position == Vector3.zero, "Special Green warns before its tempo boost");
                 ability.Suspended = true;
                 ability.Tick(5);
                 Check(ability.IsCasting && grid.transform.position == Vector3.zero, "Suspension freezes the warning");
                 ability.Suspended = false;
                 ability.Tick(.6f);
                 ability.Tick(.18f);
-                Check(Mathf.Abs(grid.transform.position.x - .1f) < .001f && !movement.UseGreenDashes,
-                    "Tier-two Green restores the short fast-forward step without enabling global legacy mode");
+                Check(grid.transform.position == Vector3.zero && ability.GreenTempoActive && !movement.UseGreenDashes,
+                    "Tier-two Green raises tempo once without moving the fleet");
                 grid.SetColor(green.Id, EnemyColor.Red);
                 ability.Tick(0);
                 var position = grid.transform.position;
@@ -409,7 +409,7 @@ namespace CandyCruisers.Editor
                 }
             });
             CheckGreenSpin();
-            Debug.Log("Special enemy checks passed: branching digits, cascade timing, promotion, Green activation spin, contours, deflection, stun recovery, matching/magic bypass and homing.");
+            Debug.Log("Special enemy checks passed: branching digits, cascade timing, promotion, Green tempo activation, contours, deflection, stun recovery, matching/magic bypass and homing.");
         }
 
         private static void CheckFeedingTendrils()
@@ -462,44 +462,20 @@ namespace CandyCruisers.Editor
                 var boundsSize = green.HitBounds.size;
                 var boundsOffset = green.HitBounds.center - green.transform.position;
                 ability.Tick(10);
-                Check(!ability.IsCasting && body.localRotation == resting,
-                    "A long frame completing the windup cannot consume the new activation spin");
-                float cooldown = ability.CooldownRemaining;
-                ability.Tick(EnemyPresentation.GreenSpinSeconds / 4);
-                Check(Quaternion.Angle(body.localRotation, resting * Quaternion.Euler(0, 0, -90)) < .01f,
-                    "The activating special Green turns a quarter revolution");
-                Check(neighbor.Visuals.Body.transform.localRotation == Quaternion.identity,
-                    "The dash does not spin other fleet members");
-                Check(green.transform.localPosition == localPosition && green.transform.localRotation == Quaternion.identity &&
-                    green.HitBounds.size == boundsSize &&
+                Check(!ability.IsCasting && ability.GreenTempoActive && body.localRotation == resting,
+                    "Special Green activates tempo without spinning");
+                Check(green.GetComponentsInChildren<MeshRenderer>().Any(renderer => renderer.enabled),
+                    "Activation displays a persistent arrow");
+                ability.Tick(100);
+                Check(!ability.IsCasting && ability.GreenTempoActive && grid.transform.position == Vector3.zero,
+                    "A special Green triggers once and never moves the fleet");
+                Check(green.transform.localPosition == localPosition && green.HitBounds.size == boundsSize &&
                     Vector3.Distance(green.HitBounds.center - green.transform.position, boundsOffset) < .0001f,
-                    "Spin changes only artwork, preserving grid placement and collision dimensions");
-                var pausedRotation = body.localRotation;
-                var pausedPosition = grid.transform.position;
-                float pausedCooldown = ability.CooldownRemaining;
-                ability.Suspended = true;
-                ability.Tick(5);
-                Check(body.localRotation == pausedRotation && grid.transform.position == pausedPosition &&
-                    ability.CooldownRemaining == pausedCooldown, "Pause freezes spin, dash and cooldown together");
-                ability.Suspended = false;
-                ability.Tick(-1);
-                ability.Tick(0);
-                Check(body.localRotation == pausedRotation, "Nonpositive time does not advance the spin");
-                ability.Tick(EnemyPresentation.GreenSpinSeconds / 4);
-                Check(Quaternion.Angle(body.localRotation, resting * Quaternion.Euler(0, 0, -180)) < .01f,
-                    "Resuming continues the spin from its paused angle");
-                ability.Tick(EnemyPresentation.GreenSpinSeconds / 2);
-                Check(Quaternion.Angle(body.localRotation, resting) < .01f &&
-                    Mathf.Abs(grid.transform.position.x - .1f) < .0001f &&
-                    Mathf.Abs(ability.CooldownRemaining - (cooldown - EnemyPresentation.GreenSpinSeconds)) < .0001f,
-                    "One full spin restores the authored pose without changing dash distance or cooldown duration");
-                ability.Tick(ability.CooldownRemaining);
-                ability.Tick(.6f);
-                ability.Tick(.05f);
-                Check(Quaternion.Angle(body.localRotation, resting) > 1, "Each later special activation spins again");
+                    "Tempo feedback preserves placement and collision bounds");
                 grid.SetColor(green.Id, EnemyColor.Red);
                 ability.Tick(0);
-                Check(Quaternion.Angle(body.localRotation, resting) < .01f, "Changing color clears a partial Green spin");
+                Check(!ability.GreenTempoActive && !green.GetComponentsInChildren<MeshRenderer>().Any(renderer => renderer.enabled),
+                    "Changing color removes the persistent tempo indicator");
             });
             foreach (float step in new[] { .01f, .05f, 2f })
                 Fixture((grid, player, tongue) =>

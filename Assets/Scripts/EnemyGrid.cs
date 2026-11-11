@@ -26,6 +26,18 @@ namespace CandyCruisers
                 return count;
             }
         }
+        public int RegularGreenCount => Mathf.Max(0, Fleet.ColorCount(EnemyColor.Green) - SpecialGreenCount);
+        public int ActiveGreenTempoCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (var enemy in views.Values)
+                    if (enemy != null && enemy.isActiveAndEnabled &&
+                        enemy.GetComponent<EnemyAbilities>()?.GreenTempoActive == true) count++;
+                return count;
+            }
+        }
         private BlueGroupShield groupShield;
         private readonly List<PresentationCue> deaths = new List<PresentationCue>();
         public bool HasDeathEffects => deaths.Exists(effect => effect != null && !effect.Finished);
@@ -351,6 +363,8 @@ namespace CandyCruisers
             {
                 if (!views.TryGetValue(clearedId, out var enemy)) continue;
                 removedColors.Add(enemy.Color);
+                if (enemy.Color == EnemyColor.Green)
+                    enemy.GetComponent<EnemyPresentation>()?.TempoDown();
                 int animationDepth = depths[clearedId];
                 var match = enemy.Visuals.Match(enemy.Color, animationDepth, multipliers[clearedId]);
                 var defeat = enemy.Visuals.Defeat(enemy.Color, animationDepth, multipliers[clearedId], Fleet.ColorCount(enemy.Color) == 0);
