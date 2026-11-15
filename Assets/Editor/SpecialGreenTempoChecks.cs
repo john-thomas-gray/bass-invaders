@@ -31,7 +31,7 @@ namespace CandyCruisers.Editor
             if (state != PlayModeStateChange.EnteredPlayMode) return;
             EditorApplication.playModeStateChanged -= OnPlayMode;
             SessionState.SetBool(PendingKey, false);
-            try { Run(); EditorApplication.Exit(0); }
+            try { Run(); FleetTickChecks.Run(); TempoMapChecks.Run(); GreenCloakChecks.Run(); EditorApplication.Exit(0); }
             catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
         }
 
@@ -93,11 +93,17 @@ namespace CandyCruisers.Editor
                             Set(ability, "cooldownBeat", -1);
                             ability.Tick(0);
                             Check(!ability.IsCasting, "Spent special cannot cast again");
-                            Check(green.GetComponentsInChildren<MeshRenderer>().Length == 4, "Shared layered dance arrow exists");
+                            Check(green.GetComponentsInChildren<MeshRenderer>().Count(layer => layer.GetComponent<MeshFilter>() != null) == 4, "Shared layered dance arrow exists");
                             var arrow = green.GetComponentsInChildren<MeshRenderer>()[0].transform.parent;
                             Check(Vector3.Dot(arrow.right, Vector3.up) > .99f, "Special arrow points upward");
                             Check(Vector3.Distance(arrow.position, green.Visuals.Body.bounds.center) < .0001f,
                                 "Special arrow is centered on its respective enemy");
+                            var label = green.GetComponentInChildren<TextMesh>();
+                            Check(label != null && label.text == "TEMPO" && label.font.name == "Bungee-Regular",
+                                "Special up arrow displays TEMPO in the usual font");
+                            Check(label.transform.position.y < arrow.position.y &&
+                                Vector3.Dot(label.transform.up, Vector3.up) > .99f,
+                                "TEMPO stays upright over the arrow's bottom third");
                             var presentation = green.GetComponent<EnemyPresentation>();
                             float width = arrow.lossyScale.x;
                             presentation.Tick(EnemyPresentation.MovementPulseSeconds / 4, EnemyColor.Green, 0);
@@ -123,8 +129,12 @@ namespace CandyCruisers.Editor
                         session.Resume(); session.Tick(beatDuration / 2); music.UpdatePlayback();
                         Near(session.TempoMultiplier, 1.06f, "Decrease completes in one beat");
                         var existingFalls = UnityEngine.Object.FindObjectsByType<GreenTempoFall>(FindObjectsSortMode.None);
+                        var unactivated = ProgressionChecks.Add(grid, EnemyColor.Green, 3, 0);
+                        grid.RefreshSpecials();
+                        Check(unactivated.IsSpecial && !unactivated.GetComponent<EnemyAbilities>().GreenTempoActive,
+                            "Group contains an unactivated special");
                         int cleared = grid.ClearMatchingChain(second.Id, EnemyColor.Green);
-                        Check(cleared == 2, "Both remaining greens clear as one group");
+                        Check(cleared == 3, "Activated and unactivated specials clear as one group");
                         session.Tick(0); music.UpdatePlayback();
                         Near(session.TempoMultiplier, 1.06f, "Group removal also ramps smoothly");
                         var falls = UnityEngine.Object.FindObjectsByType<GreenTempoFall>(FindObjectsSortMode.None)

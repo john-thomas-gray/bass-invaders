@@ -67,13 +67,14 @@ namespace CandyCruisers
         private float movementPulseEndSeconds, movementPulseMusicSeconds;
         private bool tempoArrow;
         private bool greenCloakActive, greenCloakPermanent, cloakAlphaApplied;
-        private float greenCloakElapsed, greenCloakOffbeatDelay, greenCloakFadeSeconds, uncloakedBodyAlpha;
+        private float greenCloakElapsed, greenCloakReturnDelay, greenCloakFadeSeconds, uncloakedBodyAlpha;
         private GameplayMusicPlayer greenCloakMusic;
         private AudioClip greenCloakClip;
         private bool greenCloakPreview;
         private float greenCloakStartSeconds, greenCloakMusicSeconds;
         public const float MovementPulseSeconds = .38f;
         private Transform movementArrow;
+        private TextMesh tempoLabel;
         private MeshRenderer[] movementArrowLayers;
         private MaterialPropertyBlock movementArrowTint;
         private EnemyGridMovement arrowFleet;
@@ -133,9 +134,8 @@ namespace CandyCruisers
 
         public void TempoDown()
         {
-            EnsureMovementArrow();
+            if (!tempoArrow || movementArrow == null || !movementArrowLayers[0].enabled) return;
             // The departing arrow lives independently of the destroyed enemy.
-            TempoUp();
             var copy = Instantiate(movementArrow.gameObject, movementArrow.position, Quaternion.Euler(0, 0, -90));
             copy.name = "Green tempo down arrow";
             copy.transform.localScale = movementArrow.lossyScale;
@@ -545,17 +545,13 @@ namespace CandyCruisers
             greenCloakElapsed = 0;
             var music = GetComponentInParent<GameplayMusicPlayer>();
             float beat = music != null ? music.BeatDuration : AbilityBeatClock.DefaultBeatSeconds;
-            greenCloakFadeSeconds = Mathf.Max(.001f, beat * .12f);
+            greenCloakFadeSeconds = Mathf.Max(.001f, beat);
             greenCloakMusic = music != null && music.BeatClockRunning ? music : null;
-            greenCloakOffbeatDelay = (secondsToNextBeat ?? beat) - beat * .5f;
-            if (greenCloakOffbeatDelay <= .00001f) greenCloakOffbeatDelay += beat;
+            greenCloakReturnDelay = secondsToNextBeat ?? beat;
             if (greenCloakMusic == null) return;
             greenCloakClip = music.Source.clip;
             greenCloakPreview = music.PreviewTime.HasValue;
             greenCloakStartSeconds = greenCloakMusicSeconds = music.PlaybackSeconds;
-            float offbeat = Mathf.Floor(music.BeatPosition) + .5f;
-            if (offbeat <= music.BeatPosition + .00001f) offbeat++;
-            greenCloakOffbeatDelay = music.SecondsAtBeat(offbeat) - greenCloakStartSeconds;
         }
 
         private void TickGreenCloak(float seconds)
@@ -573,7 +569,7 @@ namespace CandyCruisers
                 else greenCloakMusic = null;
             }
             if (greenCloakMusic == null) greenCloakElapsed += Mathf.Max(0, seconds);
-            if (!greenCloakPermanent && greenCloakElapsed + .00001f >= greenCloakOffbeatDelay)
+            if (!greenCloakPermanent && greenCloakElapsed + .00001f >= greenCloakReturnDelay + greenCloakFadeSeconds)
             {
                 greenCloakActive = false;
                 greenCloakMusic = null;
@@ -600,7 +596,8 @@ namespace CandyCruisers
             if (!greenCloakActive || body == null) return;
             var tint = body.color;
             uncloakedBodyAlpha = tint.a;
-            tint.a *= 1 - Mathf.SmoothStep(0, 1, greenCloakElapsed / greenCloakFadeSeconds);
+            tint.a *= greenCloakPermanent ? 0 : Mathf.SmoothStep(0, 1,
+                (greenCloakElapsed - greenCloakReturnDelay) / greenCloakFadeSeconds);
             body.color = tint;
             cloakAlphaApplied = true;
         }
@@ -643,6 +640,7 @@ namespace CandyCruisers
             if (movementArrow == null) return;
             bool active = color == EnemyColor.Green && (movementPulseRemaining > 0 || tempoArrow);
             foreach (var renderer in movementArrowLayers) renderer.enabled = active;
+            if (tempoLabel != null) tempoLabel.gameObject.SetActive(active && tempoArrow);
             if (color != EnemyColor.Green) return;
             RefreshMovementArrowDirection();
             float progress = Mathf.Clamp01(1 - movementPulseRemaining / movementPulseDuration);
@@ -660,6 +658,7 @@ namespace CandyCruisers
             movementArrow.localScale = new Vector3(width / Mathf.Max(.001f, Mathf.Abs(parentScale.x)),
                 width / Mathf.Max(.001f, Mathf.Abs(parentScale.y)), 1);
             movementArrow.position = body.bounds.center;
+            if (tempoArrow) PresentTempoLabel(width);
             float fade = tempoArrow ? 1 : 1 - Mathf.SmoothStep(0, 1, Mathf.Clamp01((sizeRatio - 1.1f) / .65f));
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
@@ -668,6 +667,34 @@ namespace CandyCruisers
                 movementArrowTint.SetColor("_Color", tint);
                 movementArrowLayers[i].SetPropertyBlock(movementArrowTint);
             }
+        }
+
+        private void PresentTempoLabel(float arrowWidth)
+        {
+            if (tempoLabel == null)
+            {
+                tempoLabel = new GameObject("Green arrow TEMPO", typeof(TextMesh)).GetComponent<TextMesh>();
+                tempoLabel.transform.SetParent(GetComponent<GridEnemy>().Visuals.Root, false);
+                tempoLabel.text = "TEMPO";
+                tempoLabel.font = Resources.Load<Font>("Fonts/Bungee-Regular");
+                tempoLabel.fontSize = 64;
+                tempoLabel.characterSize = 1;
+                tempoLabel.anchor = TextAnchor.MiddleCenter;
+                tempoLabel.alignment = TextAlignment.Center;
+                tempoLabel.color = Color.white;
+                var renderer = tempoLabel.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = tempoLabel.font.material;
+                renderer.sortingLayerID = body.sortingLayerID;
+                renderer.sortingOrder = body.sortingOrder + 8;
+            }
+            tempoLabel.gameObject.SetActive(true);
+            // Keep the caption upright and centered across the arrow's bottom third.
+            tempoLabel.transform.rotation = Quaternion.identity;
+            tempoLabel.transform.localScale = Vector3.one;
+            var bounds = tempoLabel.GetComponent<MeshRenderer>().bounds;
+            float scale = arrowWidth * .92f / Mathf.Max(.001f, bounds.size.x);
+            tempoLabel.transform.localScale = Vector3.one * scale;
+            tempoLabel.transform.position = movementArrow.position + Vector3.down * (arrowWidth * .34f);
         }
 
         private void PresentSummonFlash(EnemyColor color)
@@ -705,6 +732,7 @@ namespace CandyCruisers
             if (greenSpinRemaining > 0 && body != null) body.transform.localRotation = greenRestingRotation;
             greenSpinRemaining = 0;
             tempoArrow = false;
+            if (tempoLabel != null) tempoLabel.gameObject.SetActive(false);
             movementPulseMusic = null;
             if (aimingApplied && body != null) body.transform.localRotation = restingRotation;
             aimingApplied = false;

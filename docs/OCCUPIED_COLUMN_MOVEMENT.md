@@ -12,7 +12,7 @@ Contact uses the outer edge of the logical cell, not sprite pixels or shields.
 This keeps movement stable when art changes or shield/animation visuals grow.
 The current scene uses an unrotated grid with positive horizontal scale.
 
-Horizontal average speed is proportional to the live Green count: 0.015 world
+Horizontal average speed is proportional to the live Green count: 0.03 world
 units per second per Green, multiplied by level scaling. Zero Greens means no
 motion. The numerical timing examples below assume one Green at level-one
 speed. `UseGreenDashes` retains the previous nonzero-base-speed mode, disabled
@@ -20,10 +20,8 @@ by default.
 
 ### Beat-Locked Ticks
 
-The default fleet moves on counts two and four of the current song, holding still
-on counts one and three. Each tick keeps the original single-beat distance,
+The default fleet moves on every beat of the current song. Each tick keeps the original single-beat distance,
 using the configured movement rate multiplied by the completed beat duration.
-Skipping the other two counts halves the average speed at a constant tempo.
 Green count and level change tick length rather than tick cadence. The fallback editor beat uses the
 default soundtrack tempo when no song is playing. The final beat at an edge can
 be shortened to preserve exact boundary timing, then any remaining beat distance
@@ -50,14 +48,14 @@ local centers are:
 The implementation converts cell edges through the grid transform, rather than
 assuming its origin remains fixed. At unit scale, a level 1-6 row occupies
 columns 0-4, spans 3.75 units, and reaches the right edge when gridX is +1.5.
-At speed 0.015 units per second, that means about 100 seconds to the first right
-contact from center and 150 seconds between opposite contacts if both outer columns remain
+At speed 0.03 units per second, that means about 50 seconds to the first right
+contact from center and 75 seconds between opposite contacts if both outer columns remain
 occupied. A level 7+ row occupies columns 0-5, spans 4.5 units, and reaches the
 right edge when gridX is +0.75.
 
 If column 4 is empty, the rightmost possible occupied column becomes 3. It must
 travel another 0.75 units before touching the right border. At the default
-speed, this adds about 50 seconds. Clearing the last enemy in column 3 adds another
+speed, this adds about 25 seconds. Clearing the last enemy in column 3 adds another
 column's worth of travel. These are geometric consequences, not timers.
 
 ## Movement update

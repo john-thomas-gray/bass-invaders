@@ -268,13 +268,12 @@ remaining visual transition finishes as a disguise rather than a conversion.
 
 ## Green: Count-Based Movement
 
-Default average movement is `0.015 * liveRegularGreenCount * levelSpeedMultiplier`
+Default average movement is `0.03 * liveRegularGreenCount * levelSpeedMultiplier`
 world units per second at a constant tempo. There is no movement with zero Greens, including the Red/Blue-only
 opening. Counts are read from the live grid, including Yellow conversions.
-Movement is spent only on song counts two and four. Each tick retains the
+Movement is spent on every song beat. Each tick retains the
 original single-beat distance, using the configured `0.03 * liveRegularGreenCount *
-levelSpeedMultiplier` rate multiplied by the completed beat duration. Skipping
-counts one and three halves average travel. If a long frame crosses multiple
+levelSpeedMultiplier` rate multiplied by the completed beat duration. If a long frame crosses multiple
 beats, later movement ticks use any updated Green count.
 
 Tier-two Greens never contribute to count-based fleet movement or dash. Promotion
@@ -329,7 +328,7 @@ countdowns finish normally; new rolls use the current level. This replaces the
 older, stronger Purple/Yellow cooldown scaling.
 
 Fleet base speed increases by 3% of its initial value per level, capped at twice
-the initial speed. With the default average 0.015 units/second per Green, level 6 moves at 0.01725 per Green.
+the initial speed. With the default average 0.03 units/second per Green, level 6 moves at 0.0345 per Green.
 The legacy ordinary Green's 0.1-unit burst remains separate and does not grow with level.
 `CombatBalance` centralizes these tuning values. Basic and special abilities
 have separate tuning entries, selected from the enemy's actual tier whenever

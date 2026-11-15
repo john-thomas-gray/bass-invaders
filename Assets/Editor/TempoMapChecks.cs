@@ -232,9 +232,9 @@ namespace CandyCruisers.Editor
                         music.Source.timeSamples = Mathf.RoundToInt(Mathf.Lerp(.35f, 3.11f, i / (float)frames) * clip.frequency);
                         movement.Tick(2.76 / frames);
                     }
-                    Check(pulses == 3, "Mapped counts two and four produce one movement pulse each, including long frames and shifted downbeats");
-                    Near(root.transform.position.x, movement.CurrentSpeed * 1.5f,
-                        "Movement spends only the selected single-beat intervals across acceleration and slowdown");
+                    Check(pulses == 6, "Every mapped beat produces one movement pulse, including long frames and shifted downbeats");
+                    Near(root.transform.position.x, movement.CurrentSpeed * 3f,
+                        "Movement spends every completed single-beat interval across acceleration and slowdown");
                     music.Source.Pause();
                     float pausedBeat = music.BeatPosition;
                     Near(music.BeatPosition, pausedBeat, "Pausing leaves mapped phase unchanged");

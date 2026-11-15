@@ -104,8 +104,6 @@ namespace CandyCruisers
             {
                 lastMovementBeat++;
                 var music = GetComponent<GameplayMusicPlayer>();
-                int downbeatOffset = beatClockUsesMusic && music != null ? music.CurrentDownbeatOffsetBeats : 0;
-                if (GameplayMusicPlayer.BeatInMeasure(lastMovementBeat, downbeatOffset) % 2 != 0) continue;
                 float currentSpeed = CurrentSpeed;
                 if (currentSpeed <= 0 || !grid.OccupiedHorizontalBounds(out float left, out float right) ||
                     right - left >= 2f * PlayerMovement.HalfWidth)
@@ -118,7 +116,7 @@ namespace CandyCruisers
                     continue;
                 }
                 PulseNextGreen();
-                // Keep the original single-beat step; skipping counts one and three halves travel.
+                // Spend one completed beat of travel on every beat.
                 float elapsedBeat = beatClockUsesMusic && music != null ? music.CompletedBeatDuration(lastMovementBeat) : beatDuration;
                 AdvanceDistance(currentSpeed * elapsedBeat);
             }

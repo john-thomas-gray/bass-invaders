@@ -25,35 +25,35 @@ namespace CandyCruisers.Editor
                     movement.Tick(beat * .5);
                     Check(root.transform.position.x == 0 && pulses.Count == 0, "Fleet holds still between beats");
                     for (int i = 0; i < frames; i++) movement.Tick(12.0 * beat / frames);
-                    float expectedTravel = movement.CurrentSpeed * beat * 6;
+                    float expectedTravel = movement.CurrentSpeed * beat * 12;
                     Check(Mathf.Abs(root.transform.position.x - expectedTravel) < .0001f,
-                        $"Even-beat movement halves original travel across frame sizes: expected {expectedTravel}, got {root.transform.position.x}");
-                    Check(pulses.SequenceEqual(new[] { 1, 2, 3, 1, 2, 3 }), "Every Green pulses once before any repeats");
+                        $"Every-beat movement preserves full travel across frame sizes: expected {expectedTravel}, got {root.transform.position.x}");
+                    Check(pulses.SequenceEqual(Enumerable.Range(0, 12).Select(i => i % 3 + 1)), "Every Green pulses once before any repeats");
                     grid.Model.Remove(1);
                     grid.Model.SetColor(2, EnemyColor.Blue);
                     movement.Tick(beat);
-                    Check(pulses.Last() == 3 && pulses.Count == 7, "Dead and converted Greens leave the rotation");
+                    Check(pulses.Last() == 3 && pulses.Count == 13, "Dead and converted Greens leave the rotation");
                     movement.Tick(beat * .25);
                     movement.enabled = false;
                     movement.Tick(100);
-                    Check(pulses.Count == 7, "Pause cannot accrue movement");
+                    Check(pulses.Count == 13, "Pause cannot accrue movement");
                     movement.enabled = true;
                     movement.Tick(beat * 1.75);
-                    Check(pulses.Count == 8, "Resume preserves partial beat progress");
+                    Check(pulses.Count == 15, "Resume preserves partial beat progress");
                     movement.Tick(beat * .25);
                     movement.ResetSweep();
                     movement.Tick(beat * .5);
-                    Check(root.transform.position.x == 0 && pulses.Count == 8, "New wave discards previous partial movement");
+                    Check(root.transform.position.x == 0 && pulses.Count == 15, "New wave discards previous partial movement");
                     grid.Model.TryAdd(4, EnemyColor.Green, 0, 0);
                     movement.Tick(4 * beat);
-                    Check(pulses.Skip(8).SequenceEqual(new[] { 4, 3 }), "New Greens join deterministic row order after reset");
+                    Check(pulses.Skip(15).SequenceEqual(new[] { 4, 3, 4, 3 }), "New Greens join deterministic row order after reset");
                     Check(grid.Model.TryAdd(5, EnemyColor.Green, 3, 0), "New Green occupies an empty cell");
                     movement.Tick(2 * beat);
-                    Check(pulses.Last() == 5, "A joining Green gets a turn before an earlier Green repeats");
+                    Check(pulses.Skip(19).SequenceEqual(new[] { 5, 4 }), "A joining Green gets a turn before an earlier Green repeats");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
             }
-            var cadenceRoot = new GameObject("Even beat fixture", typeof(EnemyGrid), typeof(EnemyGridMovement));
+            var cadenceRoot = new GameObject("Every beat fixture", typeof(EnemyGrid), typeof(EnemyGridMovement));
             try
             {
                 var grid = cadenceRoot.GetComponent<EnemyGrid>();
@@ -67,13 +67,13 @@ namespace CandyCruisers.Editor
                 Check(Mathf.Abs(onTwo - movement.CurrentSpeed * beat) < .0001f,
                     "Count two moves the fleet by the original single-beat distance");
                 movement.Tick(beat);
-                Check(cadenceRoot.transform.position.x == onTwo, "Count three holds the fleet still");
+                Check(Mathf.Abs(cadenceRoot.transform.position.x - 2 * onTwo) < .0001f, "Count three moves the fleet again");
                 movement.Tick(beat);
-                Check(Mathf.Abs(cadenceRoot.transform.position.x - 2 * onTwo) < .0001f,
+                Check(Mathf.Abs(cadenceRoot.transform.position.x - 3 * onTwo) < .0001f,
                     "Count four moves the fleet again");
                 movement.Tick(beat);
-                Check(Mathf.Abs(cadenceRoot.transform.position.x - 2 * onTwo) < .0001f,
-                    "The next downbeat holds the fleet still");
+                Check(Mathf.Abs(cadenceRoot.transform.position.x - 4 * onTwo) < .0001f,
+                    "The next downbeat also moves the fleet");
             }
             finally { UnityEngine.Object.DestroyImmediate(cadenceRoot); }
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
@@ -133,7 +133,8 @@ namespace CandyCruisers.Editor
                 Check(Mathf.Abs(layers[0].bounds.size.x / enemySize - 1.75f) < .001f &&
                     tint.GetColor("_Color").a < .001f && layers.All(layer => !layer.enabled),
                     "Regular arrow finishes at 175 percent size with zero opacity");
-                Check(green.Visuals.Body.color == resting, "Pulse returns to original color without changing geometry");
+                visual.Tick(AbilityBeatClock.DefaultBeatSeconds, EnemyColor.Green, 0);
+                Check(green.Visuals.Body.color == resting, "Pulse and one-beat return fade restore original color without changing geometry");
                 visual.MovementPulse();
                 visual.Clear();
                 Check(layers.All(layer => !layer.enabled), "Clearing presentation cannot leave the arrow behind");
@@ -217,7 +218,7 @@ namespace CandyCruisers.Editor
                 Check(green.GetComponentsInChildren<MeshRenderer>().All(layer => !layer.enabled),
                     "Clock changes cannot strand an arrow");
             });
-            Debug.Log("Fleet tick checks passed: counts two and four, half-speed travel, Green rotation, removals, pause, directional rhythm arrows, reversals, fade, frame timing and edge framing.");
+            Debug.Log("Fleet tick checks passed: every-beat cadence, full-speed travel, Green rotation, removals, pause, directional rhythm arrows, reversals, fade, frame timing and edge framing.");
         }
         public static void CapturePreview()
         {
