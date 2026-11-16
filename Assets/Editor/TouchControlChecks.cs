@@ -35,7 +35,7 @@ namespace CandyCruisers.Editor
                 float radius = PlayerMovement.TouchFireRangePixels(size.x);
                 float spawnY = center.y + radius * 4;
                 Check(Mathf.Abs(radius - size.x * PlayerMovement.TouchFireScreenWidthFraction) < .001f,
-                    "Touch fire range uses 8% of screen width");
+                    "Touch fire range uses the configured fraction of screen width");
                 Check(PlayerMovement.IsTouchShootPosition(center + Vector2.right * radius, center, radius, spawnY), "Zone includes its side boundary");
                 Check(PlayerMovement.IsTouchShootPosition(new Vector2(center.x + radius * .8f, 0), center, radius, spawnY),
                     "The shooting zone extends to the bottom of the screen");
@@ -141,10 +141,69 @@ namespace CandyCruisers.Editor
                     player.TickPointerMovement(1);
                     Check(shots == 6, "Canceled gestures cannot resume or fire later");
                 });
+                CheckMovementFireGuard();
             }
             finally { if (cameraRoot != null) UnityEngine.Object.DestroyImmediate(cameraRoot); }
             Debug.Log("Touch control checks passed: spawn-height shooting, enemy/above-player tap firing, distant movement, drag, cancellation and mouse compatibility.");
         }
+        private static void CheckMovementFireGuard()
+        {
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var enemy = ProgressionChecks.Add(grid, EnemyColor.Red, 1, 0);
+                player.RefreshColor();
+                int shots = 0;
+                player.ShotAccepted += () => shots++;
+                var camera = Camera.main;
+                Vector2 ScreenPoint(float x, float y) => camera.WorldToScreenPoint(new Vector3(x, y, 0));
+                foreach (int frames in new[] { 30, 60, 120 })
+                {
+                    player.transform.position = new Vector3(0, -4.6f, 0);
+                    Vector2 destination = ScreenPoint(1.5f, -4.6f);
+                    player.BeginPointer(destination, true);
+                    for (int frame = 0; frame < frames / 5; frame++) player.TickPointerMovement(1f / frames);
+                    Check(Mathf.Abs(player.transform.position.x - 1.5f) < .001f, "Character reaches movement tap before release");
+                    player.EndPointer(destination, false);
+                    Check(shots == 0 && !tongue.Active,
+                        "A movement tap cannot become a shooting tap after the character catches up");
+                }
+
+                player.transform.position = new Vector3(0, -4.6f, 0);
+                Vector2 stationary = ScreenPoint(0, -4.6f);
+                player.BeginPointer(stationary, true);
+                player.Move(1, .05f);
+                player.Move(-1, .05f);
+                player.EndPointer(stationary, false);
+                Check(shots == 0, "Moving away and back still suppresses the character-zone shot");
+                player.BeginPointer(stationary, true);
+                player.Move(0, .1f);
+                player.EndPointer(stationary, false);
+                Check(shots == 1, "A new stationary tap fires; zero movement does not trigger the guard");
+                tongue.Cancel();
+
+                Vector2 above = ScreenPoint(1.5f, -3.4f);
+                player.BeginPointer(above, true);
+                player.TickPointerMovement(.1f);
+                Check(player.transform.position.x > 0, "Character moves before the playfield tap ends");
+                player.EndPointer(above, false);
+                Check(shots == 2 && Mathf.Abs(player.transform.position.x - 1.5f) < .001f,
+                    "Playfield taps still align and fire after movement");
+                tongue.Cancel();
+                Vector2 onEnemy = camera.WorldToScreenPoint(enemy.HitBounds.center);
+                player.BeginPointer(onEnemy, true);
+                player.TickPointerMovement(.1f);
+                player.EndPointer(onEnemy, false);
+                Check(shots == 3, "Enemy taps still fire after movement");
+                tongue.Cancel();
+
+                Vector2 mouseTarget = ScreenPoint(2.5f, -4.6f);
+                player.BeginPointer(mouseTarget);
+                player.TickPointerMovement(1);
+                player.EndPointer(mouseTarget, false);
+                Check(shots == 3, "Mouse movement follows the same character-zone firing guard");
+            });
+        }
+
         private static void Check(bool value, string message)
         { if (!value) throw new Exception("Touch control check failed: " + message); }
     }

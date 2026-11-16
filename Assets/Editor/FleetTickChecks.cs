@@ -218,8 +218,111 @@ namespace CandyCruisers.Editor
                 Check(green.GetComponentsInChildren<MeshRenderer>().All(layer => !layer.enabled),
                     "Clock changes cannot strand an arrow");
             });
+            if (Application.isPlaying) CheckMixedFleetClockTransitions();
             Debug.Log("Fleet tick checks passed: every-beat cadence, full-speed travel, Green rotation, removals, pause, directional rhythm arrows, reversals, fade, frame timing and edge framing.");
         }
+        private static void CheckMixedFleetClockTransitions()
+        {
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var special = ProgressionChecks.Add(grid, EnemyColor.Green, 0, 0);
+                ProgressionChecks.Add(grid, EnemyColor.Green, 1, 0);
+                ProgressionChecks.Add(grid, EnemyColor.Green, 2, 0);
+                var regular = ProgressionChecks.Add(grid, EnemyColor.Green, 4, 2);
+                grid.RefreshSpecials();
+                SpecialGreenTempoChecks.Activate(special);
+                Check(grid.RegularGreenCount == 1 && grid.SpecialGreenCount == 3,
+                    "Mixed fleet counts only its ordinary Green toward movement");
+                var movement = grid.GetComponent<EnemyGridMovement>();
+                var music = grid.gameObject.AddComponent<GameplayMusicPlayer>();
+                music.PreviewTempo = 120;
+                var pulses = new List<int>();
+                movement.GreenPulsed += pulses.Add;
+                music.PreviewTime = 20;
+                movement.Tick(.01);
+                music.PreviewTime = 20.5f;
+                movement.Tick(.01);
+                Check(pulses.SequenceEqual(new[] { regular.Id }),
+                    "An activated special does not block the regular Green's turn");
+
+                // A gap between songs can temporarily release movement to its fallback clock.
+                music.PreviewTime = null;
+                music.Source.Stop();
+                movement.Tick(music.BeatDuration * .25);
+                int before = pulses.Count;
+                movement.Tick(music.BeatDuration);
+                Check(pulses.Count == before + 1,
+                    "Fallback movement resumes immediately instead of waiting for the previous song's beat count");
+
+                // A replacement song may start at a later beat than the fallback clock.
+                before = pulses.Count;
+                music.PreviewTime = 10;
+                movement.Tick(.01);
+                Check(pulses.Count == before, "Acquiring a new song does not replay its earlier beats");
+                music.PreviewTime = 10.5f;
+                movement.Tick(.01);
+                Check(pulses.Count == before + 1 && pulses.All(id => id == regular.Id),
+                    "Regular Greens keep pulsing on the replacement song with specials present");
+
+                var firstClip = AudioClip.Create("Movement clock A", 44100 * 40, 1, 44100, false);
+                var secondClip = AudioClip.Create("Movement clock B", 44100 * 40, 1, 44100, false);
+                try
+                {
+                    foreach (float pitch in new[] { 1f, 1.09f })
+                    {
+                        music.PreviewTime = null;
+                        music.Source.Stop();
+                        music.Source.clip = firstClip;
+                        music.Source.pitch = pitch;
+                        music.Source.Play();
+                        music.Source.timeSamples = 44100 * 20;
+                        before = pulses.Count;
+                        movement.Tick(.01);
+                        Check(pulses.Count == before, "Acquiring live audio does not replay previous beats");
+                        AdvanceAudioBeat();
+                        Check(pulses.Count == before + 1, "Live audio drives a mixed fleet at normal and boosted tempo");
+
+                        music.Source.Stop();
+                        movement.Tick(music.BeatDuration * .25);
+                        music.Source.Play();
+                        music.Source.timeSamples = 44100;
+                        before = pulses.Count;
+                        movement.Tick(.01);
+                        AdvanceAudioBeat();
+                        Check(pulses.Count == before + 1,
+                            "Regular Green movement and arrows resume while the restarted music continues");
+
+                        var position = grid.transform.position;
+                        before = pulses.Count;
+                        music.Source.Stop();
+                        music.Source.clip = secondClip;
+                        music.Source.Play();
+                        music.Source.timeSamples = 44100 * 30;
+                        movement.Tick(.01);
+                        Check(pulses.Count == before && grid.transform.position == position,
+                            "A later position in a replacement clip cannot fast-forward fleet movement");
+                        AdvanceAudioBeat();
+                        Check(pulses.Count == before + 1 && pulses.All(id => id == regular.Id),
+                            "Clip replacement preserves every-beat movement and excludes specials from the rotation");
+                    }
+                }
+                finally
+                {
+                    music.Source.Stop();
+                    music.Source.clip = null;
+                    UnityEngine.Object.DestroyImmediate(firstClip);
+                    UnityEngine.Object.DestroyImmediate(secondClip);
+                }
+
+                void AdvanceAudioBeat()
+                {
+                    float next = music.SecondsAtBeat(Mathf.Floor(music.BeatPosition) + 1) + .01f;
+                    music.Source.timeSamples = Mathf.RoundToInt(next * music.Source.clip.frequency);
+                    movement.Tick(.01);
+                }
+            });
+        }
+
         public static void CapturePreview()
         {
             UnityEditor.SceneManagement.EditorSceneManager.OpenScene(GameplaySetup.ScenePath);

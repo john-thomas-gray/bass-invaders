@@ -22,6 +22,8 @@ namespace CandyCruisers
         private double beatPosition;
         private bool beatClockInitialized;
         private bool beatClockUsesMusic;
+        private AudioClip beatClockClip;
+        private bool beatClockPreview;
         private int lastMovementBeat = int.MinValue;
         public int Direction { get; private set; } = 1;
         public float CurrentSpeed => speed * CombatBalance.FleetSpeedMultiplier(GetComponent<GameSession>()?.Progress.Level ?? 1)
@@ -45,6 +47,8 @@ namespace CandyCruisers
             beatPosition = 0;
             beatClockInitialized = false;
             beatClockUsesMusic = false;
+            beatClockClip = null;
+            beatClockPreview = false;
             lastMovementBeat = int.MinValue;
             greenOrder.Clear();
             pulsedGreens.Clear();
@@ -137,7 +141,15 @@ namespace CandyCruisers
             if (Application.isPlaying && music != null && music.BeatClockRunning)
             {
                 double current = music.BeatPosition;
-                previous = beatClockInitialized && beatClockUsesMusic ? beatPosition : current;
+                bool sameClock = beatClockInitialized && beatClockUsesMusic &&
+                    beatClockClip == music.Source.clip && beatClockPreview == music.PreviewTime.HasValue;
+                previous = sameClock ? beatPosition : current;
+                // A new song or a return from fallback has a different beat origin.
+                // Rebase the consumed-beat cursor too: never wait for an old song's count
+                // or replay every beat before the new source's current position.
+                if (!sameClock) lastMovementBeat = (int)System.Math.Floor(current);
+                beatClockClip = music.Source.clip;
+                beatClockPreview = music.PreviewTime.HasValue;
                 beatPosition = current;
                 beatClockInitialized = true;
                 beatClockUsesMusic = true;
@@ -146,6 +158,9 @@ namespace CandyCruisers
             if (!beatClockInitialized || beatClockUsesMusic)
             {
                 beatPosition = 0;
+                lastMovementBeat = 0;
+                beatClockClip = null;
+                beatClockPreview = false;
                 beatClockInitialized = true;
                 beatClockUsesMusic = false;
             }

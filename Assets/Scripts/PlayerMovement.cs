@@ -28,7 +28,7 @@ namespace CandyCruisers
         private float pointerTravel;
         private float targetX;
         private bool movingToTarget;
-        private bool pointerActive, touchPointer, nearTouchStart, pointerDragging;
+        private bool pointerActive, touchPointer, nearTouchStart, pointerDragging, pointerMovedCharacter;
         public int Lives { get; private set; } = MaxLives;
         public int ExtraLives => Mathf.Max(0, Lives - 1);
         public PlayerLifeIcons LifeIcons { get; } = new PlayerLifeIcons();
@@ -647,7 +647,11 @@ namespace CandyCruisers
                 float fraction = session != null ? session.ContactFraction(-segment) : 1;
                 transform.position += Vector3.right * (segment * fraction);
                 HorizontalTravelled?.Invoke(Mathf.Abs(segment * fraction));
-                if (Mathf.Abs(segment * fraction) > .000001f) horizontalDirection = direction;
+                if (Mathf.Abs(segment * fraction) > .000001f)
+                {
+                    horizontalDirection = direction;
+                    if (pointerActive) pointerMovedCharacter = true;
+                }
                 if (session != null) session.FinishContactMove(fraction);
                 if (ControlsLocked) return;
                 distance -= segment;
@@ -671,6 +675,7 @@ namespace CandyCruisers
             pointerActive = true;
             touchPointer = isTouch;
             pointerDragging = false;
+            pointerMovedCharacter = false;
             nearTouchStart = IsTouchShootPosition(position, view.WorldToScreenPoint(transform.position),
                 CurrentTouchFireRangePixels(), TouchShootUpperScreenY());
             movingToTarget = false;
@@ -759,6 +764,9 @@ namespace CandyCruisers
                 fireX = Mathf.Clamp(world.x, -HalfWidth + .01f, HalfWidth - .01f);
                 return true;
             }
+            // Moving into the character's shooting zone must not turn a movement tap
+            // into a shot. Enemy and above-player playfield taps retain their alignment rule.
+            if (pointerMovedCharacter) return false;
             float radius = view != null ? CurrentTouchFireRangePixels() : 0;
             if (IsTouchShootPosition(screenPosition, view.WorldToScreenPoint(transform.position), radius, TouchShootUpperScreenY()))
                 return true;
