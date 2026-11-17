@@ -27,6 +27,7 @@ namespace CandyCruisers
             transform.position = origin + Vector3.down * (.65f * Mathf.SmoothStep(0, 1, progress));
             for (int i = 0; i < layers.Length; i++)
             {
+                layers[i].GetPropertyBlock(tint);
                 var color = i == 0 ? new Color(.13f, .12f, .12f) : Color.white;
                 color.a = 1 - progress;
                 tint.SetColor("_Color", color);

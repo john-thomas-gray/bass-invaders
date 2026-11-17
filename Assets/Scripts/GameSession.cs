@@ -150,7 +150,7 @@ namespace CandyCruisers
             }
             BeginMenuArrival();
         }
-        [SerializeField, Range(RunProgress.MinLevel, RunProgress.MaxMenuStartLevel)] private int startLevel = RunProgress.MinLevel;
+        [SerializeField, Range(RunProgress.DevelopmentLevel, RunProgress.MaxMenuStartLevel)] private int startLevel = RunProgress.MinLevel;
         private static readonly EnemyColor[] PreviewRegularColors = {
             EnemyColor.Red, EnemyColor.Blue, EnemyColor.Green, EnemyColor.Purple, EnemyColor.Yellow, EnemyColor.Orange
         };
@@ -278,7 +278,7 @@ namespace CandyCruisers
             get => startLevel;
             set
             {
-                startLevel = RunProgress.ClampMenuStartLevel(value);
+                startLevel = value <= RunProgress.DevelopmentLevel ? RunProgress.DevelopmentLevel : RunProgress.ClampMenuStartLevel(value);
                 rememberedStartLevel = startLevel;
             }
         }
@@ -308,10 +308,10 @@ namespace CandyCruisers
             RunProgress.ClampMenuStartLevel(Mathf.Max(RunProgress.MinLevel, highestReachedLevel));
 
         public static bool MainMenuLevelSelectVisibleFor(int highestReachedLevel, float introElapsed, bool arriving) =>
-            !arriving && introElapsed >= MenuWordIntroDuration && SelectableMaxStartLevelFor(highestReachedLevel) >= 2;
+            !arriving && introElapsed >= MenuWordIntroDuration;
 
         private int ClampSelectableStartLevel(int level) =>
-            Mathf.Clamp(RunProgress.ClampMenuStartLevel(level), RunProgress.MinLevel, SelectableMaxStartLevel);
+            Mathf.Clamp(level, RunProgress.DevelopmentLevel, SelectableMaxStartLevel);
 
         private void SetSelectableStartLevel(int level)
         {
@@ -1338,7 +1338,7 @@ namespace CandyCruisers
 
         private void RecordLeaderboard()
         {
-            if (leaderboardRecorded || PresentationPreview || IsAutomatedPlaytest) return;
+            if (leaderboardRecorded || PresentationPreview || IsAutomatedPlaytest || Progress.IsDevelopmentLevel) return;
             leaderboardRecorded = true;
             LastLeaderboardRank = LocalLeaderboard.Submit(Progress.Score, Progress.Level);
         }
@@ -1647,7 +1647,7 @@ namespace CandyCruisers
         }
 
         public static string GameOverSummaryText(int level, long score) =>
-            "LEVEL " + level + "    SCORE " + score.ToString("N0");
+            "LEVEL " + RunProgress.LevelLabel(level) + "    SCORE " + score.ToString("N0");
 
         public static int FitGameOverTitle(GUIStyle style, Rect rect)
         {
@@ -1886,7 +1886,7 @@ namespace CandyCruisers
             value.normal.textColor = Color.white;
             var stepButton = new GUIStyle(button) { fontSize = 14 };
             if (GUI.Button(MenuLevelDownRect(x, y, width), "- (Left)", stepButton)) { menuLevelDigits = ""; StartLevel--; }
-            GUI.Label(MenuLevelValueRect(x, y, width), "Level " + StartLevel, value);
+            GUI.Label(MenuLevelValueRect(x, y, width), "Level " + RunProgress.LevelLabel(StartLevel), value);
             if (GUI.Button(MenuLevelUpRect(x, y, width), "+ (Right)", stepButton)) { menuLevelDigits = ""; StartLevel++; }
         }
 
@@ -2114,7 +2114,7 @@ namespace CandyCruisers
                 padding = new RectOffset()
             };
             style.normal.textColor = color;
-            string text = StartLevel.ToString();
+            string text = RunProgress.LevelLabel(StartLevel);
             var content = new GUIContent(text);
             while (style.fontSize > 12 && style.CalcSize(content).x > value.width) style.fontSize--;
             GUI.Label(value, text, style);
@@ -2499,7 +2499,7 @@ namespace CandyCruisers
             int headingSize = GameplayHeadingFontSize(viewHeight);
             DrawGameplayText(GameplayScoreRect(x, y, textWidth, viewHeight), "SCORE " + Progress.Score.ToString("N0"),
                 GameplayTextStyle(headingSize, TextAnchor.MiddleLeft), GameplayTextColor, opacity, beat);
-            DrawGameplayText(GameplayLevelRect(x, y, textWidth), "LEVEL " + Progress.Level,
+            DrawGameplayText(GameplayLevelRect(x, y, textWidth), "LEVEL " + RunProgress.LevelLabel(Progress.Level),
                 GameplayTextStyle(headingSize, TextAnchor.MiddleRight), GameplayTextColor, opacity, beat);
             GUI.color = previous;
         }

@@ -5,7 +5,10 @@ namespace CandyCruisers
 {
     public sealed class RunProgress
     {
+        public const int DevelopmentLevel = 0;
         public const int MinLevel = 1;
+        public static string LevelLabel(int level) => level == DevelopmentLevel ? "D" : level.ToString();
+        public bool IsDevelopmentLevel => Level == DevelopmentLevel;
         public const int MaxMenuStartLevel = 99;
         public int Level { get; private set; } = 1;
         public int Defeated { get; private set; }
@@ -23,12 +26,12 @@ namespace CandyCruisers
         // Defeat thresholds remain for procedural development fixtures without a level map.
         public int NextThreshold => NextThresholdForLevel(Level);
         public int PreviousThreshold => PreviousThresholdForLevel(Level);
-        public int EarnedLevel => UsesScriptedProgression ?
+        public int EarnedLevel => IsDevelopmentLevel ? DevelopmentLevel : UsesScriptedProgression ?
             (ClearedFleets >= FleetsToClear && Level < int.MaxValue ? Level + 1 : Level) : LevelForDefeated(Defeated);
         public bool LevelUpPending => EarnedLevel > Level;
         public int EarnedPreviousThreshold => PreviousThresholdForLevel(EarnedLevel);
         public int EarnedNextThreshold => NextThresholdForLevel(EarnedLevel);
-        public float ActiveLevelProgressFraction => UsesScriptedProgression ?
+        public float ActiveLevelProgressFraction => IsDevelopmentLevel ? 0 : UsesScriptedProgression ?
             ClearedFleets / (float)FleetsToClear : FractionBetween(Defeated, PreviousThreshold, NextThreshold);
         public float BankedLevelProgressFraction => LevelUpPending ?
             FractionBetween(Defeated, EarnedPreviousThreshold, EarnedNextThreshold) : 0;
@@ -62,7 +65,7 @@ namespace CandyCruisers
 
         public void Reset(int level = MinLevel)
         {
-            Level = Math.Max(MinLevel, level);
+            Level = level == DevelopmentLevel ? DevelopmentLevel : Math.Max(MinLevel, level);
             Defeated = UsesScriptedProgression ? 0 : PreviousThreshold;
             ClearedFleets = 0;
             Score = 0;
@@ -78,7 +81,7 @@ namespace CandyCruisers
             Defeated = (int)Math.Min(int.MaxValue, (long)Defeated + count);
             if (fleetCleared)
             {
-                if (UsesScriptedProgression) ClearedFleets++;
+                if (UsesScriptedProgression && !IsDevelopmentLevel) ClearedFleets++;
                 AdvanceLevelIfEarned();
             }
             return earned;

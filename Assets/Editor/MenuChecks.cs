@@ -61,8 +61,8 @@ namespace CandyCruisers.Editor
                 if (!Application.isPlaying) InvokeLifecycle(session, "OnEnable");
                 session.StartLevel = RunProgress.MaxMenuStartLevel + 1;
                 Check(session.StartLevel == RunProgress.MaxMenuStartLevel, "Menu start level clamps to the maximum");
-                session.StartLevel = RunProgress.MinLevel - 1;
-                Check(session.StartLevel == RunProgress.MinLevel, "Menu start level clamps to the minimum");
+                session.StartLevel = RunProgress.DevelopmentLevel - 1;
+                Check(session.StartLevel == RunProgress.DevelopmentLevel, "Menu start level clamps to the minimum");
                 var red = ProgressionChecks.Add(grid, EnemyColor.Red, 2, 0);
                 var ability = red.GetComponent<EnemyAbilities>();
                 player.RefreshColor();
@@ -128,7 +128,7 @@ namespace CandyCruisers.Editor
                     Check(session.HandleMenuKey(KeyCode.Alpha9) && session.StartLevel == 9, "Typing one digit selects that start level");
                     Check(session.HandleMenuKey(KeyCode.Alpha9) && session.StartLevel == 12,
                         "Typing above the all-time level clamps to the highest reached level");
-                    Check(session.HandleMenuKey(KeyCode.Alpha0) && session.StartLevel == RunProgress.MinLevel,
+                    Check(session.HandleMenuKey(KeyCode.Alpha0) && session.StartLevel == RunProgress.DevelopmentLevel,
                         "Typing after two digits starts a fresh capped menu entry");
                     Check(session.HandleMenuKey(KeyCode.Keypad7) && session.StartLevel == 7, "Numeric keypad digits continue typed level entry");
                     session.StartLevel = 11;
@@ -390,11 +390,11 @@ namespace CandyCruisers.Editor
             LocalLeaderboard.Clear();
             Check(GameSession.HighestReachedLevel == RunProgress.MinLevel,
                 "Highest reached level defaults to the first level");
-            Check(!GameSession.MainMenuLevelSelectVisibleFor(1, GameSession.MenuWordIntroDuration, false) &&
+            Check(GameSession.MainMenuLevelSelectVisibleFor(1, GameSession.MenuWordIntroDuration, false) &&
                 !GameSession.MainMenuLevelSelectVisibleFor(2, GameSession.MenuWordIntroDuration - .01f, false) &&
                 !GameSession.MainMenuLevelSelectVisibleFor(2, GameSession.MenuWordIntroDuration, true) &&
                 GameSession.MainMenuLevelSelectVisibleFor(2, GameSession.MenuWordIntroDuration, false),
-                "Level select appears only after level two is unlocked and the startup animation has finished");
+                "Level select includes development before any unlock once the startup animation has finished");
             Check(GameSession.SelectableMaxStartLevelFor(0) == RunProgress.MinLevel &&
                 GameSession.SelectableMaxStartLevelFor(120) == RunProgress.MaxMenuStartLevel,
                 "Selectable level cap remains within supported menu levels");
@@ -485,7 +485,11 @@ namespace CandyCruisers.Editor
                     Check(session.StartLevel == 7 && !session.MenuArriving, "Upper level limit cannot fall through to start");
                     session.StartLevel = 1;
                     Tap(left.center);
-                    Check(session.StartLevel == 1 && !session.MenuArriving, "Lower level limit cannot fall through to start");
+                    Check(session.StartLevel == RunProgress.DevelopmentLevel && !session.MenuArriving, "Left from one selects development");
+                    Tap(left.center);
+                    Check(session.StartLevel == RunProgress.DevelopmentLevel && !session.MenuArriving, "Development is the lower selector limit");
+                    Tap(right.center);
+                    Check(session.StartLevel == 1 && !session.MenuArriving, "Right from development returns to level one");
                     Tap(new Vector2(row.center.x, row.yMax + 40));
                     Check(session.MenuArriving, "A tap outside the selector still starts the selected game");
                 }

@@ -24,7 +24,10 @@ namespace CandyCruisers
         public EnemyColor AbilityColor => enemy == null ? currentColor :
             grid != null && grid.Model.IsAttached(enemy.Id) ? grid.Model.CopiedColor(enemy.Id).Value : enemy.Color;
         public bool YellowBlueShield => IsDisguised && AbilityColor == EnemyColor.Blue;
-        public Color ShieldTint => YellowBlueShield ? EnemyPalette.Get(EnemyColor.Yellow) : new Color(.82f, 1, 1);
+        public Color ShieldTint => YellowBlueShield ? MimicAbilityVisuals.ShieldYellow : new Color(.82f, 1, 1);
+        public bool IsMimicking => enemy != null && grid != null && grid.Model.IsAttached(enemy.Id);
+        public int MimicHostMask => IsMimicking ? grid.Model.HostCoverage(enemy.Id) : 0;
+        public EnemyColor EffectColor => IsDisguised ? EnemyColor.Yellow : AbilityColor;
         public bool IsDisguised => enemy != null && grid != null && grid.Model.IsAttached(enemy.Id) && grid.Model.IsSpecialImitation(enemy.Id);
         public bool IsTransforming => imitationRemaining > 0;
         private const float ShieldPowerSeconds = .35f;
@@ -33,6 +36,8 @@ namespace CandyCruisers
         private bool awaitingSpawnShield;
         private Vector3 shieldFullScale;
         private bool groupShielded;
+        private Material originalShieldMaterial;
+        private MaterialPropertyBlock shieldTint;
         public void SetGroupShielded(bool value)
         {
             groupShielded = value;
@@ -103,6 +108,8 @@ namespace CandyCruisers
                 shield.sprite = shieldSprite;
                 shield.color = new Color(0.3f, 0.85f, 1f, 0.9f);
                 shield.sortingOrder = body.sortingOrder + 1;
+                originalShieldMaterial = shield.sharedMaterial;
+                shieldTint = new MaterialPropertyBlock();
             }
             ResetAbility();
             greenTempoTriggered = retainGreenTempo;
@@ -213,10 +220,11 @@ namespace CandyCruisers
                 var projectile = missile.GetComponent<EnemyMissile>();
                 if (enemy.IsSpecial) projectile.LaunchAimed(player, heading);
                 else projectile.SetTarget(player);
+                if (IsDisguised) projectile.SetTint(EnemyPalette.Get(EnemyColor.Yellow));
                 var flightSound = projectile.GetComponent<MissileFlightSound>();
                 if (flightSound == null) flightSound = projectile.gameObject.AddComponent<MissileFlightSound>();
                 flightSound.Configure(projectile, grid.GetComponent<SoundEffects>());
-                enemy.Visuals.Fire(AbilityColor);
+                enemy.Visuals.Fire(EffectColor);
                 ScheduleCooldown();
             }
             else if (AbilityColor == EnemyColor.Blue && !shieldSpent && !ShieldActive && !awaitingSpawnShield && shieldPowerRemaining <= 0 && beatClock.Reached(cooldownBeat))
@@ -307,6 +315,7 @@ namespace CandyCruisers
 
         internal void OnHostKilled()
         {
+            if (greenTempoTriggered) presentation.TempoDown();
             ResetAbility();
             presentation.RevealDisguise();
             grid.GetComponent<SoundEffects>()?.PlayCue(SoundEffect.YellowReveal);
@@ -346,6 +355,14 @@ namespace CandyCruisers
             shield.transform.localPosition = Vector3.down * body.sprite.bounds.extents.y * 1.1f * (1 - growth);
             var tint = ShieldTint;
             shield.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(.65f, 1, growth));
+            shield.sharedMaterial = IsMimicking ? MimicAbilityVisuals.Material : originalShieldMaterial;
+            if (IsMimicking)
+            {
+                shieldTint.SetColor("_Color", Color.white);
+                MimicAbilityVisuals.Configure(shieldTint, this, shield.bounds.center, false);
+                shield.SetPropertyBlock(shieldTint);
+            }
+            else shield.SetPropertyBlock(null);
         }
         private void OnDisable()
         {

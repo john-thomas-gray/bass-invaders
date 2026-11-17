@@ -23,6 +23,7 @@ namespace CandyCruisers.Editor
         public static void RunPhone() => RunSized(440, 900, "phone");
         private static void RunSized(int width, int height, string name)
         {
+            MetronomeCheckSettings.BeginRuntime(Pending);
             EditorSceneManager.OpenScene(GameplaySetup.ScenePath);
             var type = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
             foreach (var existing in Resources.FindObjectsOfTypeAll(type)) ((EditorWindow)existing).Close();
@@ -170,9 +171,34 @@ namespace CandyCruisers.Editor
                 }
                 else if (stage == 7 && EditorApplication.timeSinceStartup - finished > .25f)
                 {
+                    foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>().ToArray())
+                        if (grid.View(enemy.Id) != null) grid.ClearMatchingChain(enemy.Id, enemy.Color);
+                    session.LevelCatalog = LevelCatalog.Parse(File.ReadAllText(LevelCatalog.FilePath));
+                    session.StartLevel = RunProgress.DevelopmentLevel;
+                    typeof(GameSession).GetProperty("State").SetValue(session, GameSession.RunState.MainMenu);
+                    session.ClearCelebration.Reset();
+                    session.StartRun();
+                    stage = 8;
+                }
+                else if ((stage == 8 || stage == 9) && session.State == GameSession.RunState.Playing)
+                {
+                    Check(session.Progress.IsDevelopmentLevel && session.Progress.ClearedFleets == 0 &&
+                        session.Progress.ActiveLevelProgressFraction == 0 && grid.Model.Count == 6,
+                        "Development starts and repeats its six-color scenario without progression: level=" + session.Progress.Level +
+                        ", cleared=" + session.Progress.ClearedFleets + ", enemies=" + grid.Model.Count);
+                    if (stage == 8)
+                    {
+                        foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>().ToArray())
+                            if (grid.View(enemy.Id) != null) grid.ClearMatchingChain(enemy.Id, enemy.Color);
+                        Check(session.State == GameSession.RunState.Refilling && session.Progress.IsDevelopmentLevel &&
+                            !session.Progress.LevelUpPending, "A live development clear refills without entering level one");
+                        stage = 9;
+                        return;
+                    }
                     DeveloperOptions.PlayerInvincible = previousInvincibility;
                     SpawnOverride.Enabled = previousOverride;
                     SessionState.SetBool(Pending, false);
+                    MetronomeCheckSettings.EndRuntime(Pending);
                     Debug.Log("Level progression runtime checks passed: " + SessionState.GetString(Pending + ".Size", "desktop") +
                         ", JSON source, sparse opening, round-wide assignments, opening and incoming wildcards, required colors, partial clears, every scripted fleet, progress bar, level change, refill, bars, background and soundtrack selection.");
                     EditorApplication.Exit(0);
@@ -183,6 +209,7 @@ namespace CandyCruisers.Editor
                 SessionState.SetBool(Pending, false);
                 DeveloperOptions.PlayerInvincible = previousInvincibility;
                 SpawnOverride.Enabled = previousOverride;
+                MetronomeCheckSettings.EndRuntime(Pending);
                 Debug.LogException(error);
                 EditorApplication.Exit(1);
             }

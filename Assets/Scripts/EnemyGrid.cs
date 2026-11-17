@@ -404,7 +404,7 @@ namespace CandyCruisers
             {
                 if (!views.TryGetValue(clearedId, out var enemy)) continue;
                 removedColors.Add(enemy.Color);
-                if (enemy.Color == EnemyColor.Green && enemy.IsSpecial)
+                if (enemy.IsSpecial)
                     enemy.GetComponent<EnemyPresentation>()?.TempoDown();
                 int animationDepth = depths[clearedId];
                 var match = enemy.Visuals.Match(enemy.Color, animationDepth, multipliers[clearedId]);

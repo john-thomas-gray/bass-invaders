@@ -28,7 +28,7 @@ namespace CandyCruisers
         public bool Protects(int id) => protectedIds.Contains(id);
         public bool Blocks(int id, EnemyColor shotColor) => Protects(id) &&
             shotColor != (yellowIds.Contains(id) ? EnemyColor.Yellow : EnemyColor.Blue);
-        private Color Tint(int owner) => yellowIds.Contains(owner) ? EnemyPalette.Get(EnemyColor.Yellow) : new Color(.82f, 1, 1);
+        private Color Tint(int owner) => yellowIds.Contains(owner) ? MimicAbilityVisuals.ShieldYellow : MimicAbilityVisuals.ShieldBlue;
 
         public void Refresh(EnemyGrid grid)
         {
@@ -123,8 +123,8 @@ namespace CandyCruisers
                         Vector3 previousDirection = (previous.B - previous.A).normalized;
                         Vector3 nextDirection = (next.B - next.A).normalized;
                         vertices.Add(OffsetCorner(next.A, previousDirection, nextDirection, inset));
-                        var tint = Color.Lerp(Tint(previous.Owner), Tint(next.Owner), .5f);
-                        tint.a = 1 - Mathf.SmoothStep(0, 1, t);
+                        var tint = Color.Lerp(MimicAbilityVisuals.ShieldBand(Tint(previous.Owner), t),
+                            MimicAbilityVisuals.ShieldBand(Tint(next.Owner), t), .5f);
                         colors.Add(tint);
                     }
                 }

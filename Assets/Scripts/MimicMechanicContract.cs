@@ -109,9 +109,57 @@ namespace CandyCruisers
             grid.GetComponent<EnemyGridMovement>().enabled = false;
         }
 
+        public static void PopulateAbilityGallery(EnemyGrid grid, Func<EnemyColor, int, int, GridEnemy> add)
+        {
+            void Copy(GridEnemy yellow, GridEnemy host, bool special = false)
+            {
+                if (special) { yellow.Promote(); yellow.GetComponent<EnemyAbilities>().OnPromoted(); }
+                var ability = yellow.GetComponent<EnemyAbilities>();
+                ability.Suspended = false; ability.BeginImitation(host);
+                if (!special) ability.Tick(EnemyAbilities.DefaultImitationSeconds);
+                ability.Suspended = true;
+            }
+            var square = add(EnemyColor.Yellow, 1, 1);
+            add(EnemyColor.Blue, 3, 1);
+            Copy(square, add(EnemyColor.Blue, 2, 1), true);
+            Copy(add(EnemyColor.Yellow, 1, 2), square, true);
+            var half = add(EnemyColor.Yellow, 1, 4);
+            Copy(half, add(EnemyColor.Blue, 0, 4));
+            TickAbility(half, half.GetComponent<EnemyAbilities>().CooldownRemaining + .35f);
+            var quarters = add(EnemyColor.Yellow, 4, 4);
+            add(EnemyColor.Blue, 4, 3);
+            Copy(quarters, add(EnemyColor.Blue, 5, 4));
+            TickAbility(quarters, quarters.GetComponent<EnemyAbilities>().CooldownRemaining + .35f);
+            var red = add(EnemyColor.Yellow, 1, 7);
+            Copy(red, add(EnemyColor.Red, 0, 7), true);
+            var before = new System.Collections.Generic.HashSet<int>();
+            foreach (var old in UnityEngine.Object.FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None)) before.Add(old.GetInstanceID());
+            TickAbility(red, red.GetComponent<EnemyAbilities>().CooldownRemaining + .001f);
+            foreach (var shot in UnityEngine.Object.FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None))
+                if (!before.Contains(shot.GetInstanceID()))
+                { shot.Suspended = true; shot.transform.position = red.transform.position + Vector3.down * .7f; }
+            var purple = add(EnemyColor.Yellow, 4, 7);
+            Copy(purple, add(EnemyColor.Purple, 5, 7), true);
+            purple.GetComponent<EnemyPresentation>().SummonFlash();
+            add(EnemyColor.Red, 4, 9).GetComponent<EnemyAbilities>().BeginSpawnEffect(EnemyColor.Yellow, true);
+            var green = add(EnemyColor.Yellow, 1, 10);
+            add(EnemyColor.Green, 1, 9);
+            Copy(green, add(EnemyColor.Green, 0, 10));
+            green.GetComponent<EnemyPresentation>().MovementPulse(1, .5f);
+            green.GetComponent<EnemyPresentation>().Tick(.25f, EnemyColor.Green, 0);
+            var tempo = add(EnemyColor.Yellow, 4, 10);
+            Copy(tempo, add(EnemyColor.Green, 5, 10), true);
+            TickAbility(tempo, tempo.GetComponent<EnemyAbilities>().CooldownRemaining + .001f);
+            TickAbility(tempo, AbilityBeatClock.DefaultBeatSeconds + .001f);
+            tempo.GetComponent<EnemyPresentation>().TempoDown();
+            foreach (var fall in UnityEngine.Object.FindObjectsByType<GreenTempoFall>(FindObjectsSortMode.None))
+            { fall.transform.position += Vector3.left * .75f; fall.enabled = false; }
+            grid.RefreshSpecials(); grid.enabled = false; grid.GetComponent<EnemyGridMovement>().enabled = false;
+        }
+
         public static int Run(GameObject[] prefabs, GameObject missile, Sprite shield)
         {
-            int cases = RunHostJunctions(prefabs, missile, shield);
+            int cases = RunHostJunctions(prefabs, missile, shield) + RunAbilityVisuals(prefabs, missile, shield);
             foreach (int rate in new[] { 30, 60, 120 })
             foreach (EnemyColor color in new[] { EnemyColor.Red, EnemyColor.Blue, EnemyColor.Green, EnemyColor.Purple, EnemyColor.Orange })
             foreach (bool special in new[] { false, true })
@@ -490,6 +538,195 @@ namespace CandyCruisers
                 cases++;
             }
             Debug.Log("Mimic contract passed: " + cases + " cases for grouping, shots, tiers, target pool, coverage and permanent conversion.");
+            return cases;
+        }
+
+        private static void TickAbility(GridEnemy enemy, float seconds)
+        {
+            var ability = enemy.GetComponent<EnemyAbilities>();
+            ability.Suspended = false; ability.Tick(seconds); ability.Suspended = true;
+        }
+
+        private static bool Hue(Color color, EnemyColor expected)
+        {
+            if (expected == EnemyColor.Blue) return color.b > color.r + .18f;
+            if (expected == EnemyColor.Green) return color.g > color.r + .12f && color.g > color.b + .12f;
+            return color.r > color.b + .18f && color.g > color.b + .18f;
+        }
+
+        private static void CheckEffectPixels(Renderer source, int mask, EnemyColor host)
+        {
+            var root = new GameObject("Copied effect render check");
+            var mesh = new Mesh();
+            var texture = new RenderTexture(32, 32, 16);
+            var pixels = new Texture2D(32, 32, TextureFormat.RGB24, false);
+            var previous = RenderTexture.active;
+            try
+            {
+                var quad = new GameObject("Effect sample", typeof(MeshFilter), typeof(MeshRenderer));
+                quad.transform.SetParent(root.transform); quad.layer = 31;
+                quad.transform.position = new Vector3(1000, 1000, 0);
+                mesh.vertices = new[] { new Vector3(-.8f, -.8f), new Vector3(.8f, -.8f), new Vector3(-.8f, .8f), new Vector3(.8f, .8f) };
+                mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
+                mesh.colors = new[] { Color.white, Color.white, Color.white, Color.white };
+                mesh.triangles = new[] { 0, 1, 2, 2, 1, 3 };
+                quad.GetComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = quad.GetComponent<MeshRenderer>(); renderer.sharedMaterial = source.sharedMaterial;
+                var block = new MaterialPropertyBlock(); source.GetPropertyBlock(block);
+                block.SetVector("_EffectCenter", quad.transform.position);
+                block.SetTexture("_MainTex", Texture2D.whiteTexture); block.SetColor("_Color", Color.white);
+                renderer.SetPropertyBlock(block);
+                var camera = new GameObject("Effect sample camera", typeof(Camera)).GetComponent<Camera>();
+                camera.transform.SetParent(root.transform); camera.transform.position = new Vector3(1000, 1000, -10);
+                camera.orthographic = true; camera.orthographicSize = 1; camera.aspect = 1;
+                camera.cullingMask = 1 << 31; camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.black;
+                camera.targetTexture = texture;
+                foreach (int rotation in new[] { 0, 90, 180 })
+                {
+                    quad.transform.rotation = Quaternion.Euler(0, 0, rotation);
+                    camera.Render(); RenderTexture.active = texture;
+                    pixels.ReadPixels(new Rect(0, 0, 32, 32), 0, 0); pixels.Apply();
+                    foreach (int x in new[] { 8, 24 })
+                    foreach (int y in new[] { 8, 24 })
+                    {
+                        bool covered = (mask & (x < 16 ? 1 : 2)) != 0 || (mask & (y > 16 ? 4 : 8)) != 0;
+                        Require(Hue(pixels.GetPixel(x, y), covered ? host : EnemyColor.Yellow),
+                            $"Rendered ability quadrant matches the body in world space (mask={mask}, rotation={rotation}, x={x}, y={y})");
+                    }
+                }
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(mesh);
+                UnityEngine.Object.DestroyImmediate(texture); UnityEngine.Object.DestroyImmediate(pixels);
+            }
+        }
+
+        private static int RunAbilityVisuals(GameObject[] prefabs, GameObject missile, Sprite shield)
+        {
+            int cases = 0;
+            foreach (int rate in new[] { 30, 60, 120 })
+            foreach (EnemyColor color in new[] { EnemyColor.Blue, EnemyColor.Green })
+            foreach (int mask in new[] { 1, 2, 4, 8, 5, 6, 9, 10 })
+            using (var board = new Board(prefabs, missile, shield))
+            {
+                var yellow = board.Add(EnemyColor.Yellow, 2, 4);
+                GridEnemy target = null;
+                foreach (var side in new[] { (1,-1,0), (2,1,0), (4,0,-1), (8,0,1) })
+                    if ((mask & side.Item1) != 0) target = board.Add(color, 2 + side.Item2, 4 + side.Item3);
+                board.Copy(yellow, target, rate);
+                Renderer effect;
+                if (color == EnemyColor.Blue)
+                {
+                    TickAbility(yellow, yellow.GetComponent<EnemyAbilities>().CooldownRemaining + .35f);
+                    effect = yellow.Visuals.Root.Find("Shield").GetComponent<SpriteRenderer>();
+                    Require(yellow.GetComponent<EnemyAbilities>().ShieldActive && effect.enabled,
+                        "Split-color regular Blue shield still activates normally");
+                }
+                else
+                {
+                    var presentation = yellow.GetComponent<EnemyPresentation>();
+                    presentation.MovementPulse(-1, .5f); presentation.Tick(.2f, color, 0);
+                    presentation.SendMessage("LateUpdate");
+                    effect = yellow.Visuals.Root.Find("Green movement arrow/Green arrow green rim").GetComponent<MeshRenderer>();
+                    Require(effect.enabled && !yellow.IsSpecial && !yellow.GetComponent<EnemyAbilities>().GreenTempoActive,
+                        "A regular Green mimic keeps its directional arrow and regular ability tier");
+                }
+                Require(effect.sharedMaterial.shader.name == "CandyCruisers/MimicAbility", "Copied effects use the shared quadrant shader");
+                if (rate == 60) CheckEffectPixels(effect, mask, color);
+                if (color == EnemyColor.Blue)
+                    Require(board.Grid.ResolveTongueHit(yellow.Id, EnemyColor.Red) == EnemyGrid.TongueHitResult.ShieldAbsorbed &&
+                        board.Grid.View(yellow.Id) == yellow, "Changing shield colors preserves ordinary shield absorption");
+                cases++;
+            }
+            foreach (int rate in new[] { 30, 60, 120 })
+            foreach (EnemyColor color in new[] { EnemyColor.Red, EnemyColor.Green, EnemyColor.Blue })
+            using (var board = new Board(prefabs, missile, shield))
+            {
+                var mimic = board.Add(EnemyColor.Yellow, 2, 4, true);
+                var host = board.Add(color, 3, 4); board.Copy(mimic, host, rate);
+                var ability = mimic.GetComponent<EnemyAbilities>();
+                if (color == EnemyColor.Red)
+                {
+                    var before = new System.Collections.Generic.HashSet<int>();
+                    foreach (var old in UnityEngine.Object.FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None)) before.Add(old.GetInstanceID());
+                    TickAbility(mimic, ability.CooldownRemaining + .001f);
+                    EnemyMissile fired = null;
+                    foreach (var candidate in UnityEngine.Object.FindObjectsByType<EnemyMissile>(FindObjectsSortMode.None))
+                        if (!before.Contains(candidate.GetInstanceID())) fired = candidate;
+                    Require(fired != null && fired.Aimed && !fired.Homing, "Special Red mimic retains its aimed missile behavior");
+                    fired.SetTarget(null);
+                    Require(Hue(fired.GetComponent<SpriteRenderer>().color, EnemyColor.Yellow), "Yellow missile tint survives a visual refresh");
+                    UnityEngine.Object.DestroyImmediate(fired.gameObject);
+                }
+                else if (color == EnemyColor.Green)
+                {
+                    TickAbility(mimic, ability.CooldownRemaining + .001f);
+                    TickAbility(mimic, AbilityBeatClock.DefaultBeatSeconds + .001f);
+                    var arrow = mimic.Visuals.Root.Find("Green movement arrow/Green arrow green rim").GetComponent<MeshRenderer>();
+                    Require(ability.GreenTempoActive && arrow.enabled, "Yellow tempo arrow still activates the special Green ability");
+                    CheckEffectPixels(arrow, 0, EnemyColor.Yellow);
+                    mimic.GetComponent<EnemyPresentation>().TempoDown();
+                    var fall = UnityEngine.Object.FindFirstObjectByType<GreenTempoFall>();
+                    Require(fall != null, "Special Green mimic supplies a falling tempo arrow");
+                    fall.Tick(.1f);
+                    CheckEffectPixels(fall.transform.Find("Green arrow green rim").GetComponent<MeshRenderer>(), 0, EnemyColor.Yellow);
+                    UnityEngine.Object.DestroyImmediate(fall.gameObject);
+                }
+                else
+                {
+                    board.Add(EnemyColor.Blue, 4, 4); board.Grid.RefreshSpecials();
+                    var band = board.Grid.GroupShield.GetComponentInChildren<MeshFilter>().sharedMesh;
+                    bool saturatedBlue = false, saturatedYellow = false, darkEdge = false, brightEdge = false;
+                    foreach (var tint in band.colors)
+                    {
+                        saturatedBlue |= tint.a > .9f && tint.b > tint.r + .5f;
+                        saturatedYellow |= tint.a > .9f && tint.r > tint.b + .5f;
+                        darkEdge |= tint.a > .9f && tint.maxColorComponent < .3f;
+                        brightEdge |= tint.a > .9f && Mathf.Min(tint.r, Mathf.Min(tint.g, tint.b)) > .7f;
+                    }
+                    Require(saturatedBlue && saturatedYellow && darkEdge && brightEdge && board.Grid.GroupShield.ContourCount == 1,
+                        $"Joined shields retain saturated colors and keylines (blue={saturatedBlue}, yellow={saturatedYellow}, dark={darkEdge}, bright={brightEdge}, contours={board.Grid.GroupShield.ContourCount})");
+                }
+                cases++;
+            }
+            foreach (bool special in new[] { false, true })
+            using (var board = new Board(prefabs, missile, shield))
+            {
+#if UNITY_EDITOR
+                bool previous = SpawnOverride.Enabled; int types = SpawnOverride.Types;
+#endif
+                try
+                {
+#if UNITY_EDITOR
+                    SpawnOverride.Enabled = true; SpawnOverride.Types = 1 << (int)EnemyColor.Red;
+#endif
+                    var mimic = board.Add(EnemyColor.Yellow, 2, 4, special);
+                    board.Copy(mimic, board.Add(EnemyColor.Purple, 3, 4), 60);
+                    var summoned = board.Grid.GetComponent<EnemyRowSpawner>().TrySummon(mimic);
+                    Require(summoned != null && board.Grid.Model.Find(summoned.Id).Color == summoned.Color,
+                        "Copied Purple keeps the spawned enemy's true color");
+                    var body = summoned.Visuals.Body.color; var expected = EnemyPalette.Get(summoned.Color);
+                    Require(Vector3.Distance(new Vector3(body.r, body.g, body.b), new Vector3(expected.r, expected.g, expected.b)) < .001f,
+                        "Portal tint preserves the incoming enemy's own body color");
+                    var glow = mimic.Visuals.Root.Find("Purple summon flash glow").GetComponent<LineRenderer>();
+                    var rift = summoned.Visuals.Root.Find("Summoning rift").GetComponent<LineRenderer>();
+                    Require(glow.enabled && rift.enabled, "Both copied Purple summon effects are visible");
+                    if (special) Require(Hue(glow.startColor, EnemyColor.Yellow) && Hue(rift.startColor, EnemyColor.Yellow),
+                        "Special Purple mimic gives both its flash and the incoming portal Yellow accents");
+                    else Require(glow.startColor.b > .9f && rift.startColor.b > rift.startColor.g &&
+                        glow.sharedMaterial.shader.name != "CandyCruisers/YellowAttachment",
+                        "Regular Purple mimic retains the ordinary Purple flash");
+                }
+                finally
+                {
+#if UNITY_EDITOR
+                    SpawnOverride.Enabled = previous; SpawnOverride.Types = types;
+#endif
+                }
+                cases++;
+            }
             return cases;
         }
 

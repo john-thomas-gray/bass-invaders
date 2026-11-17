@@ -101,6 +101,7 @@ namespace CandyCruisers.Editor
                 UnityEngine.Random.InitState(673091);
                 var catalog = LevelCatalog.Parse(FixtureJson);
                 Check(catalog.ForLevel(1) == catalog.levels[0] && catalog.ForLevel(99) == catalog.levels[1], "Numbered map and final-level inheritance");
+                CheckDevelopmentLevel();
                 CheckFleetRows(catalog);
                 CheckValidation();
                 CheckFleetProgression(catalog);
@@ -116,6 +117,45 @@ namespace CandyCruisers.Editor
                 Debug.Log("Level map checks passed: JSON parsing, invalid settings, sparse fleets, exact letters, random palettes, required colors, round bindings, independent fleet palettes and line loops, cleared locks, restart/level resets, immutable plans, full-clear level advancement, progress bars and desktop/phone backgrounds.");
             }
             finally { SpawnOverride.Enabled = previousOverride; UnityEngine.Random.state = random; }
+        }
+
+        private static void CheckDevelopmentLevel()
+        {
+            var root = JObject.Parse(FixtureJson);
+            ((JObject)root["levels"]).AddFirst(new JProperty("D", root["levels"]["1"].DeepClone()));
+            var catalog = LevelCatalog.Parse(root.ToString());
+            Check(catalog.levels.Length == 2 && catalog.ForLevel(0) == catalog.developmentLevel &&
+                catalog.ForLevel(1) == catalog.levels[0] && catalog.ForLevel(99) == catalog.levels[1],
+                "Development does not shift numbered levels or final-level inheritance");
+            var progress = new RunProgress { LevelCatalog = catalog };
+            progress.Reset(RunProgress.DevelopmentLevel);
+            for (int i = 0; i < 20; i++) progress.RegisterClear(100, true);
+            Check(progress.IsDevelopmentLevel && progress.Defeated == 2000 && progress.ClearedFleets == 0 &&
+                progress.ActiveLevelProgressFraction == 0 && !progress.LevelUpPending && !progress.AdvanceLevelIfEarned(),
+                "Development never advances after kills or repeated full clears");
+            progress.LevelCatalog = null;
+            progress.RegisterClear(100, true);
+            Check(progress.IsDevelopmentLevel && !progress.LevelUpPending, "Procedural overrides cannot advance development");
+            progress.LevelCatalog = catalog;
+            progress.Reset();
+            Check(progress.Level == 1, "Normal runs still start at one");
+            Check(RunProgress.LevelLabel(0) == "D" && GameSession.GameOverSummaryText(0, 0).StartsWith("LEVEL D"),
+                "Development uses D in level labels");
+            SpecialEnemyChecks.Fixture((grid, player, tongue) =>
+            {
+                var session = grid.gameObject.AddComponent<GameSession>();
+                try
+                {
+                    session.Configure(player); session.LevelCatalog = catalog;
+                    session.Progress.Reset(RunProgress.DevelopmentLevel);
+                    var spawner = grid.GetComponent<EnemyRowSpawner>();
+                    for (int i = 0; i < 4; i++)
+                        Check(spawner.PlanNextFleet().Rows == 4, "Development repeats its first scenario instead of advancing fleets");
+                }
+                finally { UnityEngine.Object.DestroyImmediate(session); }
+            });
+            Check(LevelCatalog.Parse(File.ReadAllText(LevelCatalog.FilePath)).developmentLevel != null,
+                "The shipped map includes development");
         }
 
         private static void CheckValidation()

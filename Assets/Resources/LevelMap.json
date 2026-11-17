@@ -1,6 +1,18 @@
 {
   "schemaVersion": 3,
   "levels": {
+    "D": {
+      "backgroundImage": "",
+      "possibleSoundtrackTracks": [],
+      "fleets": [
+        {
+          "possibleColors": ["Red", "Blue", "Green", "Purple", "Yellow", "Orange"],
+          "initialFleet": ["yybryy",
+        "yygpyy"],
+          "lineSpawns": []
+        }
+      ]
+    },
     "1": {
       "backgroundImage": "bg-level-1",
       "possibleSoundtrackTracks": [],

@@ -6,6 +6,7 @@ using UnityEngine;
 namespace CandyCruisers
 {
     // Used only by the isolated desktop/phone validation scene, never self-installs.
+    [DefaultExecutionOrder(30)]
     public sealed class YellowHostPlatformProbe : MonoBehaviour
     {
         public GameObject[] Prefabs;
@@ -30,13 +31,32 @@ namespace CandyCruisers
         }
         private static void Require(bool value, string message)
         { if (!value) throw new Exception(message); }
+        private void LateUpdate()
+        {
+            if (grid == null) return;
+            foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
+                enemy.GetComponent<EnemyPresentation>().Tick(0, enemy.GetComponent<EnemyAbilities>().AbilityColor, 0);
+            grid.GroupShield.Refresh(grid);
+        }
         private IEnumerator Start()
         {
             Application.runInBackground = true;
             string result;
+            // Temporary-camera render probes and live captures run in separate fresh players.
+            if (Environment.GetEnvironmentVariable("YELLOW_HOST_PREVIEW_ONLY") != "1")
+            {
+                try
+                {
+                    int cases = MimicMechanicContract.Run(Prefabs, Missile, Shield);
+                    result = "PASS: " + cases + " host cases at 30/60/120 frames per second; " + Application.platform;
+                }
+                catch (Exception error) { result = "FAIL: " + error; Debug.LogError(result); }
+                Debug.Log(result);
+                File.WriteAllText(Path.Combine(Application.persistentDataPath, "yellow-host-result.txt"), result);
+                yield break;
+            }
             try
             {
-                int cases = MimicMechanicContract.Run(Prefabs, Missile, Shield);
                 grid = new GameObject("Split preview", typeof(EnemyGrid), typeof(EnemyRowSpawner)).GetComponent<EnemyGrid>();
                 grid.ConfigureAbilities(Missile, Shield);
                 var preview = grid.GetComponent<EnemyRowSpawner>();
@@ -44,8 +64,8 @@ namespace CandyCruisers
                 preview.ConfigureNewTypes(Prefabs[2], Prefabs[3], Prefabs[4], Prefabs[5]);
                 preview.ConfigureSpecialSprite(Prefabs[5].GetComponentInChildren<SpriteRenderer>().sprite);
                 grid.transform.position = Vector3.up * 3.6f;
-                MimicMechanicContract.PopulateGallery(grid, Add);
-                result = "PASS: " + cases + " host cases at 30/60/120 frames per second; " + Application.platform;
+                MimicMechanicContract.PopulateAbilityGallery(grid, Add);
+                result = "PREVIEW: copied ability graphics; " + Application.platform;
             }
             catch (Exception error) { result = "FAIL: " + error; Debug.LogError(result); }
             Debug.Log(result);

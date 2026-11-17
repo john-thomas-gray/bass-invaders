@@ -11,7 +11,13 @@ an installed game to include file changes.
 
 ## Format
 
-The outer `levels` object uses consecutive keys starting at `"1"`. Each key
+The outer `levels` object starts with the special `"D"` development entry,
+followed by consecutive keys starting at `"1"`. D is selected manually before
+level 1 in both level selectors and never occurs during normal progression.
+Edit its fleet to set up a scenario quickly. Clearing it repeats its first fleet;
+its level and progress bar never advance, and its runs do not enter the leaderboard.
+It uses the same background, soundtrack, fleet and line-spawn settings as regular
+levels. Older maps without D remain valid. Each key
 identifies a level, so there is no redundant `levelNumber` setting. Object key
 order does not matter. Levels beyond the last entry reuse the last entry's
 settings and complete fleet sequence; their spawn cursors still reset.

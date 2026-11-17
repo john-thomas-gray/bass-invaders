@@ -99,6 +99,13 @@ namespace CandyCruisers
             musicBeatInitialized = false;
         }
 
+        public void SetTint(Color color)
+        {
+            if (visual == null) visual = GetComponent<SpriteRenderer>();
+            baseColor = color;
+            RefreshVisual();
+        }
+
         public int ConsumeFlashBeeps()
         {
             int count = pendingFlashBeeps;

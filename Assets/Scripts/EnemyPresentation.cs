@@ -95,7 +95,7 @@ namespace CandyCruisers
                 summonCore.sortingOrder++;
             }
             summonFlashRemaining = SummonFlashSeconds;
-            Tick(0, GetComponent<GridEnemy>().Color, 0);
+            Tick(0, GetComponent<EnemyAbilities>()?.AbilityColor ?? GetComponent<GridEnemy>().Color, 0);
         }
         public void MovementPulse(int direction = 1, float? fallbackSecondsToNextBeat = null)
         {
@@ -139,6 +139,12 @@ namespace CandyCruisers
             var copy = Instantiate(movementArrow.gameObject, movementArrow.position, Quaternion.Euler(0, 0, -90));
             copy.name = "Green tempo down arrow";
             copy.transform.localScale = movementArrow.lossyScale;
+            var copies = copy.GetComponentsInChildren<MeshRenderer>();
+            for (int i = 0; i < movementArrowLayers.Length; i++)
+            {
+                movementArrowLayers[i].GetPropertyBlock(movementArrowTint);
+                copies[i].SetPropertyBlock(movementArrowTint);
+            }
             GreenTempoFall.Create(copy, GetComponentInParent<GameplayMusicPlayer>()?.BeatDuration ?? AbilityBeatClock.DefaultBeatSeconds);
         }
 
@@ -272,7 +278,7 @@ namespace CandyCruisers
             var child = new GameObject(name, typeof(LineRenderer));
             child.transform.SetParent(GetComponent<GridEnemy>().Visuals.Root, false);
             var line = child.GetComponent<LineRenderer>();
-            line.sharedMaterial = body.sharedMaterial;
+            line.sharedMaterial = EffectMaterial;
             line.useWorldSpace = true;
             line.positionCount = count;
             line.startWidth = line.endWidth = width;
@@ -672,9 +678,9 @@ namespace CandyCruisers
             if (movementArrow != null && (movementPulseRemaining > 0 || tempoArrow))
             {
                 TickMovementPulse(0);
-                PresentMovementArrow(GetComponent<GridEnemy>().Color);
+                PresentMovementArrow(GetComponent<EnemyAbilities>()?.AbilityColor ?? GetComponent<GridEnemy>().Color);
             }
-            if (body != null) ApplyGreenCloak(GetComponent<GridEnemy>().Color);
+            if (body != null) ApplyGreenCloak(GetComponent<EnemyAbilities>()?.AbilityColor ?? GetComponent<GridEnemy>().Color);
         }
 
         private void PresentMovementArrow(EnemyColor color)
@@ -702,11 +708,15 @@ namespace CandyCruisers
             movementArrow.position = body.bounds.center;
             if (tempoArrow) PresentTempoLabel(width);
             float fade = tempoArrow ? 1 : 1 - Mathf.SmoothStep(0, 1, Mathf.Clamp01((sizeRatio - 1.1f) / .65f));
+            var ability = GetComponent<EnemyAbilities>();
             for (int i = 0; i < movementArrowLayers.Length; i++)
             {
                 var tint = i == 0 ? new Color(.13f, .12f, .12f) : Color.white;
                 tint.a = fade;
                 movementArrowTint.SetColor("_Color", tint);
+                bool copiedColorLayer = (i == 1 || i == 3) && ability != null && ability.IsMimicking;
+                movementArrowLayers[i].sharedMaterial = copiedColorLayer ? MimicAbilityVisuals.Material : movementArrowMaterial;
+                if (copiedColorLayer) MimicAbilityVisuals.Configure(movementArrowTint, ability, body.bounds.center, true);
                 movementArrowLayers[i].SetPropertyBlock(movementArrowTint);
             }
         }
@@ -748,9 +758,13 @@ namespace CandyCruisers
             float age = SummonFlashSeconds - summonFlashRemaining;
             // A brief white hold makes the source readable before the violet afterglow fades.
             float flash = 1 - Mathf.Clamp01((age - .08f) / (SummonFlashSeconds - .08f));
-            body.color = Color.Lerp(body.color, Color.white, flash);
-            summonGlow.startColor = summonGlow.endColor = new Color(1, .15f, 1, flash * .9f);
-            summonCore.startColor = summonCore.endColor = new Color(1, .9f, 1, flash);
+            bool yellow = GetComponent<EnemyAbilities>()?.IsDisguised == true;
+            var glow = yellow ? EnemyPalette.Get(EnemyColor.Yellow) : new Color(1, .15f, 1);
+            var core = yellow ? Color.Lerp(glow, Color.white, .65f) : new Color(1, .9f, 1);
+            body.color = Color.Lerp(body.color, yellow ? Color.Lerp(glow, Color.white, .12f) : Color.white, flash);
+            glow.a = flash * .9f; core.a = flash;
+            summonGlow.startColor = summonGlow.endColor = glow;
+            summonCore.startColor = summonCore.endColor = core;
             float radius = Mathf.Max(body.bounds.extents.x, body.bounds.extents.y) *
                 Mathf.Lerp(1.15f, 1.8f, age / SummonFlashSeconds);
             for (int i = 0; i < summonGlow.positionCount; i++)

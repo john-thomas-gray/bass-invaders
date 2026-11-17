@@ -106,7 +106,7 @@ namespace CandyCruisers
             bool orange = colors.Remove(EnemyColor.Orange) && Random.Range(0, OrangeSpawnOdds) == 0;
             if (!orange && colors.Count == 0) return null;
             var summoned = Spawn(orange ? EnemyColor.Orange : colors[Random.Range(0, colors.Count)], cell.x, cell.y,
-                EnemyColor.Purple, true);
+                source.GetComponent<EnemyAbilities>()?.IsDisguised == true ? EnemyColor.Yellow : EnemyColor.Purple, true);
             if (summoned != null)
             {
                 source.GetComponent<EnemyPresentation>()?.SummonFlash();
@@ -240,7 +240,7 @@ namespace CandyCruisers
             foreach (var color in plan.SpawnPalette)
                 if (Prefab(color) == null || Prefab(color).GetComponentInChildren<SpriteRenderer>() == null)
                 { Debug.LogError("Missing enemy prefab for scripted color " + color, this); return null; }
-            nextFleet = (nextFleet + 1) % definition.fleets.Length;
+            nextFleet = Level == RunProgress.DevelopmentLevel ? 0 : (nextFleet + 1) % definition.fleets.Length;
             return plan;
         }
 

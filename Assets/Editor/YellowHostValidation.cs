@@ -90,5 +90,14 @@ namespace CandyCruisers.Editor
             GameplayChecks.Capture(1280, 720, "yellow-host-desktop");
             GameplayChecks.Capture(390, 844, "yellow-host-phone");
         }
+
+        public static void CaptureAbilityVisuals()
+        {
+            EditorSceneManager.OpenScene(GameplaySetup.ScenePath);
+            var grid = GameObject.Find("Enemy Grid").GetComponent<EnemyGrid>();
+            MimicMechanicContract.PopulateAbilityGallery(grid, (color, x, y) => ProgressionChecks.Add(grid, color, x, y));
+            GameplayChecks.Capture(1280, 720, "yellow-abilities-desktop");
+            GameplayChecks.Capture(390, 844, "yellow-abilities-phone");
+        }
     }
 }

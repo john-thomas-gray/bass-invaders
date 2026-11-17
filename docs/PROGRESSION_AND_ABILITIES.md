@@ -264,6 +264,16 @@ friendly shot color.
 Other special mimics can be killed only by Yellow or rainbow shots; unrelated
 ordinary colors pass through. Revealing uses the existing flash animation.
 
+Special Blue and Yellow shields use saturated color bands with a dark outer
+keyline and bright edge, retaining their seamless shared square contour. Special
+Yellow mimics fire Yellow missiles when copying Red, use Yellow source flashes
+and incoming portals when copying Purple, and use Yellow colored elements in
+Green tempo arrows. Regular Blue and Green mimics use the same world-facing
+half/quarter coverage as their bodies on circular shields and movement arrows;
+white arrow insets and dark outlines retain their usual colors. Arrow rotation
+and shield growth preserve the world-facing color sections. These accents are
+presentation colors; existing ability, collision and timing rules apply.
+
 ### Coverage and Permanent Conversion
 
 A regular mimic's half facing each adjacent enemy showing the copied color is

@@ -11,13 +11,16 @@ namespace CandyCruisers
     public sealed class LevelCatalog
     {
         public const string FilePath = "Assets/Resources/LevelMap.json";
+        public LevelDefinition developmentLevel;
         public LevelDefinition[] levels = Array.Empty<LevelDefinition>();
-        public LevelDefinition ForLevel(int number) => number < 1 || levels == null || levels.Length == 0 ? null :
+        public LevelDefinition ForLevel(int number) => number == RunProgress.DevelopmentLevel ? developmentLevel : number < 1 || levels == null || levels.Length == 0 ? null :
             levels[Math.Min(number, levels.Length) - 1];
 
         public List<string> ValidationErrors()
         {
             var errors = new List<string>();
+            if (developmentLevel != null)
+                foreach (string error in developmentLevel.ValidationErrors()) errors.Add("Level D: " + error);
             if (levels == null || levels.Length == 0) errors.Add("The level map needs level 1.");
             else for (int index = 0; index < levels.Length; index++)
             {
@@ -44,11 +47,13 @@ namespace CandyCruisers
                 Fields(root, "schemaVersion", "levels");
                 if (Integer(root, "schemaVersion") != 3) throw new FormatException("schemaVersion must be 3; levels contain fleet objects with possibleColors, initialFleet and lineSpawns.");
                 if (!(root["levels"] is JObject entries) || entries.Count == 0) throw new FormatException("levels must be an object containing level 1.");
-                var catalog = new LevelCatalog { levels = new LevelDefinition[entries.Count] };
+                var catalog = new LevelCatalog { levels = new LevelDefinition[entries.Count - (entries.Property("D") != null ? 1 : 0)] };
                 foreach (var entry in entries.Properties())
                 {
-                    if (!int.TryParse(entry.Name, out int number) || number < 1 || number > entries.Count || entry.Name != number.ToString())
-                        throw new FormatException("Level keys must be consecutive numbers starting at 1.");
+                    bool development = entry.Name == "D";
+                    int number = RunProgress.DevelopmentLevel;
+                    if (!development && (!int.TryParse(entry.Name, out number) || number < 1 || number > catalog.levels.Length || entry.Name != number.ToString()))
+                        throw new FormatException("Level keys must be D or consecutive numbers starting at 1.");
                     if (!(entry.Value is JObject data)) throw new FormatException("Level " + number + " must be an object.");
                     Fields(data, "backgroundImage", "possibleSoundtrackTracks", "fleets");
                     var level = new LevelDefinition {
@@ -65,7 +70,8 @@ namespace CandyCruisers
                         level.backgroundImage = Resources.Load<Sprite>(image);
                         if (level.backgroundImage == null) throw new FormatException("Level " + number + ": background sprite '" + image + "' was not found under Resources.");
                     }
-                    catalog.levels[number - 1] = level;
+                    if (development) catalog.developmentLevel = level;
+                    else catalog.levels[number - 1] = level;
                 }
                 var errors = catalog.ValidationErrors();
                 if (errors.Count > 0) throw new FormatException(string.Join("\n", errors));
