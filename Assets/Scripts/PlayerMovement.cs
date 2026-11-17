@@ -134,7 +134,6 @@ namespace CandyCruisers
             if (subscribedGrid == null) return;
             subscribedGrid.ColorCleared += AwardMagic;
             subscribedGrid.MatchCleared += OnMatchCleared;
-            subscribedGrid.LastYellowTransformed += OnLastYellowTransformed;
             subscribedGrid.FleetCleared += ResetMagic;
         }
         private void UnsubscribeFromGrid()
@@ -147,7 +146,6 @@ namespace CandyCruisers
             if (subscribedGrid == null) return;
             subscribedGrid.ColorCleared -= AwardMagic;
             subscribedGrid.MatchCleared -= OnMatchCleared;
-            subscribedGrid.LastYellowTransformed -= OnLastYellowTransformed;
             subscribedGrid.FleetCleared -= ResetMagic;
             subscribedGrid = null;
         }
@@ -209,11 +207,6 @@ namespace CandyCruisers
             RefreshPresentation(Time.time);
         }
         private void ResetMagic() { MagicCharges = 0; pendingMagicAbsorptions = 0; }
-        private void OnLastYellowTransformed()
-        {
-            if (ReadyColor == EnemyColor.Yellow) Hit();
-            RefreshColor();
-        }
         private float recoveryRemaining;
         private float recoveryElapsed;
         private bool awaitingRespawn;
@@ -504,6 +497,9 @@ namespace CandyCruisers
                 return chosen;
             }
             if (grid.Fleet.Count == 0) return current;
+            // Copying never consumes Yellow identity. Automatic refresh must retain a held Yellow,
+            // including when the new host shields change the reachable-color filter.
+            if (!reroll && current == EnemyColor.Yellow && grid.Model.ColorCount(EnemyColor.Yellow) > 0) return current;
             if (weights.Count == 0) return null;
             // Reserve the preview using the same reachable colors as the next shot.
             return reroll || !current.HasValue || !weights.ContainsKey(current.Value) ? ChooseColor(weights) : current;

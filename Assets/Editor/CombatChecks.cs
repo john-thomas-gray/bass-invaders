@@ -16,8 +16,8 @@ namespace CandyCruisers.Editor
                 var second = CombatBalance.CooldownRange(color, 2, special);
                 var final = CombatBalance.CooldownRange(color, 10000, special);
                 // Basic and upgraded enemies have independently tuned starting ranges.
-                Vector2[] basic = { new(2.25f, 7.5f), new(2.25f, 7.5f), new(6, 9), new(6, 9), new(1.5f, 9), new(.75f, 3.75f) };
-                Vector2[] upgraded = { new(2.25f, 13.5f), new(.75f, 3.75f), new(1.5f, 12), new(6, 18), new(1.5f, 7.5f), new(.75f, 3.75f) };
+                Vector2[] basic = { new(3.75f, 7.5f), new(2.25f, 7.5f), new(6, 9), new(6, 9), new(2.25f, 9), new(.75f, 3.75f) };
+                Vector2[] upgraded = { new(3.75f, 13.5f), new(.75f, 3.75f), new(1.5f, 12), new(6, 33), new(2.25f, 7.5f), new(.75f, 3.75f) };
                 Check(first == (special ? upgraded : basic)[(int)color], "Cooldowns preserve the current independent starting ranges: " + color);
                 Check(first.x > 0 && first.y >= first.x + 3, "Cooldowns stay positive with room for variance");
                 Check(second.x == first.x && second.y <= first.y && Mathf.Abs(second.y - Mathf.Max(first.x + 3, first.y - .25f)) < .001f,

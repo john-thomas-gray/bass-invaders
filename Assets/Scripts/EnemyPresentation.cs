@@ -165,6 +165,47 @@ namespace CandyCruisers
             if (!aiming && Quaternion.Angle(body.transform.localRotation, restingRotation) < .001f)
             { body.transform.localRotation = restingRotation; aimingApplied = false; }
         }
+        private GridEnemy attachmentHost;
+        private Material attachmentMaterial;
+        private Material originalMaterial;
+        public Material EffectMaterial => attachmentMaterial != null ? originalMaterial : body.sharedMaterial;
+        public static Material StableEffectMaterial(SpriteRenderer source) =>
+            source.GetComponentInParent<EnemyPresentation>()?.EffectMaterial ?? source.sharedMaterial;
+        public bool HalfHostColor => attachmentHost != null;
+        public Vector2 HostSide { get; private set; }
+        public int HostMask { get; private set; }
+        public void SetHostAttachment(GridEnemy host, bool half)
+        {
+            if (!half || host == null) return;
+            attachmentHost = host;
+            originalMaterial = body.sharedMaterial;
+            attachmentMaterial = new Material(Resources.Load<Shader>("YellowAttachment"));
+            body.sharedMaterial = attachmentMaterial;
+            PresentHostAttachment();
+        }
+        private void PresentHostAttachment()
+        {
+            if (attachmentHost == null || attachmentMaterial == null) return;
+            var owner = GetComponent<GridEnemy>();
+            HostMask = GetComponentInParent<EnemyGrid>().Model.HostCoverage(owner.Id);
+            HostSide = (HostMask & 1) != 0 ? Vector2.left : (HostMask & 2) != 0 ? Vector2.right :
+                (HostMask & 4) != 0 ? Vector2.up : Vector2.down;
+            attachmentMaterial.SetVector("_HostSides", new Vector4((HostMask & 1) != 0 ? 1 : 0,
+                (HostMask & 2) != 0 ? 1 : 0, (HostMask & 4) != 0 ? 1 : 0, (HostMask & 8) != 0 ? 1 : 0));
+            attachmentMaterial.SetVector("_SpriteCenter", body.sprite.bounds.center);
+            attachmentMaterial.SetColor("_HostColor", body.color);
+            attachmentMaterial.SetColor("_YellowColor", EnemyPalette.Get(EnemyColor.Yellow));
+        }
+        private void ClearHostAttachment()
+        {
+            attachmentHost = null;
+            HostMask = 0;
+            HostSide = Vector2.zero;
+            if (attachmentMaterial == null) return;
+            body.sharedMaterial = originalMaterial;
+            if (Application.isPlaying) Destroy(attachmentMaterial); else DestroyImmediate(attachmentMaterial);
+            attachmentMaterial = null;
+        }
         public void BeginImitation(GridEnemy neighbor, Sprite previousSprite, bool linked = true)
         {
             yellowRevealAge = yellowRevealArrivalSeconds + yellowRevealReturnSeconds;
@@ -175,8 +216,8 @@ namespace CandyCruisers
             targetPosition = neighbor.transform.position;
             oldSprite = previousSprite;
             imitationRemaining = EnemyAbilities.DefaultImitationSeconds;
-            imitationColor = neighbor.Color;
-            body.sprite = neighbor.Visuals.Body.sprite;
+            imitationColor = GetComponentInParent<EnemyGrid>().Model.CopiedColor(GetComponent<GridEnemy>().Id) ?? neighbor.Color;
+            body.sprite = previousSprite;
             if (feedingImitation) EnsureFeedingTendrils();
         }
         public void SetImitationProgress(float progress)
@@ -355,6 +396,7 @@ namespace CandyCruisers
             PresentYellowRevealReturn();
             PresentFeedingTendrils(assimilation);
             ApplyGreenCloak(color);
+            PresentHostAttachment();
         }
 
         private void PresentYellowRevealReturn()
@@ -724,6 +766,7 @@ namespace CandyCruisers
 
         public void Clear()
         {
+            ClearHostAttachment();
             RestoreCloakAlpha();
             greenCloakActive = greenCloakPermanent = false;
             greenCloakMusic = null;

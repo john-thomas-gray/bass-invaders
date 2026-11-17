@@ -33,6 +33,7 @@ namespace CandyCruisers
         public bool Active { get; private set; }
         public bool LastCompletionCancelled { get; private set; }
         public bool HitRegularShield { get; private set; }
+        public bool RevealedYellow { get; private set; }
         public bool Retracting => Active && travel >= maximumLength;
         public float Length => Active ? (Retracting ? Mathf.Max(0, 2 * maximumLength - travel) : travel) : 0;
         public float ReturnSpeed => deflectedRetractSpeed > 0 ? deflectedRetractSpeed : retractSpeed * (IsMagic ? 4 : 1);
@@ -120,6 +121,7 @@ namespace CandyCruisers
             Active = true;
             LastCompletionCancelled = false;
             HitRegularShield = false;
+            RevealedYellow = false;
             SetVisualColor(color, magic);
             Draw();
             ExtensionStarted?.Invoke();
@@ -198,13 +200,14 @@ namespace CandyCruisers
                 else
                 {
                     bool stopped = false;
-                    // Revealed Yellows cease matching this shot; keep sweeping the same segment.
+                    // Reveals do not stop extension; keep sweeping for a real matching enemy.
                     while (grid != null && grid.FindMatchingHit(transform.position, travel, nextLength,
                         ShotColor, NormalHitRadius, out int id, out float hitLength))
                     {
                         var result = grid.ResolveTongueHit(id, ShotColor);
                         if (!Active) return;
-                        if (result == EnemyGrid.TongueHitResult.PassThrough) continue;
+                        RevealedYellow |= result == EnemyGrid.TongueHitResult.Revealed;
+                        if (result == EnemyGrid.TongueHitResult.PassThrough || result == EnemyGrid.TongueHitResult.Revealed) continue;
                         HitRegularShield = result == EnemyGrid.TongueHitResult.ShieldAbsorbed;
                         seconds -= (hitLength - travel) / extensionRate;
                         if (result == EnemyGrid.TongueHitResult.Deflected)

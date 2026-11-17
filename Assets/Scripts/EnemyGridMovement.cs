@@ -176,7 +176,7 @@ namespace CandyCruisers
             for (int column = 0; column < GridModel.Columns; column++)
             {
                 var enemy = grid.Model.At(column, row);
-                if (enemy == null || enemy.Color != EnemyColor.Green || grid.View(enemy.Id)?.IsSpecial == true) continue;
+                if (enemy == null || (grid.View(enemy.Id)?.GetComponent<EnemyAbilities>()?.AbilityColor ?? enemy.Color) != EnemyColor.Green || grid.View(enemy.Id)?.IsSpecial == true) continue;
                 liveGreens.Add(enemy.Id);
                 if (!pulsedGreens.Contains(enemy.Id) && !greenOrder.Contains(enemy.Id)) greenOrder.Add(enemy.Id);
             }
@@ -189,7 +189,7 @@ namespace CandyCruisers
                 for (int column = 0; column < GridModel.Columns; column++)
                 {
                     var enemy = grid.Model.At(column, row);
-                    if (enemy != null && enemy.Color == EnemyColor.Green && grid.View(enemy.Id)?.IsSpecial != true) greenOrder.Add(enemy.Id);
+                    if (enemy != null && (grid.View(enemy.Id)?.GetComponent<EnemyAbilities>()?.AbilityColor ?? enemy.Color) == EnemyColor.Green && grid.View(enemy.Id)?.IsSpecial != true) greenOrder.Add(enemy.Id);
                 }
             }
             if (greenOrder.Count == 0) return;

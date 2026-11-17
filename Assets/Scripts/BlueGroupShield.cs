@@ -21,15 +21,22 @@ namespace CandyCruisers
         private readonly List<Color> colors = new List<Color>();
         private readonly List<int> triangles = new List<int>();
         private readonly HashSet<int> protectedIds = new HashSet<int>();
+        private readonly HashSet<int> yellowIds = new HashSet<int>();
+        private readonly Dictionary<int, int> owners = new Dictionary<int, int>();
         public int EdgeCount => edges.Count;
         public int ContourCount => contourCount;
         public bool Protects(int id) => protectedIds.Contains(id);
+        public bool Blocks(int id, EnemyColor shotColor) => Protects(id) &&
+            shotColor != (yellowIds.Contains(id) ? EnemyColor.Yellow : EnemyColor.Blue);
+        private Color Tint(int owner) => yellowIds.Contains(owner) ? EnemyPalette.Get(EnemyColor.Yellow) : new Color(.82f, 1, 1);
 
         public void Refresh(EnemyGrid grid)
         {
             edges.Clear();
             contourCount = 0;
             protectedIds.Clear();
+            yellowIds.Clear();
+            owners.Clear();
             var visited = new HashSet<int>();
             for (int row = 0; row < GridModel.Rows; row++)
             for (int column = 0; column < GridModel.Columns; column++)
@@ -46,25 +53,44 @@ namespace CandyCruisers
                     if (enemy.IsSpecial && ability != null && ability.isActiveAndEnabled && ability.ShieldActive) source = member.Id;
                 }
                 if (source == 0) continue;
-                int firstEdge = edges.Count;
                 foreach (var member in group)
                 {
                     protectedIds.Add(member.Id);
-                    var center = grid.CellPosition(member.Column, member.Row);
-                    float half = grid.Spacing / 2;
-                    var tl = center + new Vector3(-half, half, 0);
-                    var tr = center + new Vector3(half, half, 0);
-                    var bl = center + new Vector3(-half, -half, 0);
-                    var br = center + new Vector3(half, -half, 0);
-                    bool BlueAt(int x, int y) => grid.Model.At(x, y)?.Color == EnemyColor.Blue;
-                    int cellColumn = member.Column, cellRow = member.Row;
-                    if (!BlueAt(cellColumn, cellRow - 1)) AddEdge(new Vector2Int(cellColumn, cellRow), new Vector2Int(cellColumn + 1, cellRow), tl, tr, source);
-                    if (!BlueAt(cellColumn + 1, cellRow)) AddEdge(new Vector2Int(cellColumn + 1, cellRow), new Vector2Int(cellColumn + 1, cellRow + 1), tr, br, source);
-                    if (!BlueAt(cellColumn, cellRow + 1)) AddEdge(new Vector2Int(cellColumn + 1, cellRow + 1), new Vector2Int(cellColumn, cellRow + 1), br, bl, source);
-                    if (!BlueAt(cellColumn - 1, cellRow)) AddEdge(new Vector2Int(cellColumn, cellRow + 1), new Vector2Int(cellColumn, cellRow), bl, tl, source);
+                    owners[member.Id] = source;
                 }
-                TraceContours(firstEdge, edges.Count);
             }
+            foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
+            {
+                var ability = enemy.GetComponent<EnemyAbilities>();
+                if (ability == null || !ability.isActiveAndEnabled || !ability.YellowBlueShield || !ability.ShieldActive) continue;
+                protectedIds.Add(enemy.Id);
+                yellowIds.Add(enemy.Id);
+                owners[enemy.Id] = enemy.Id;
+            }
+            // Trace one union of shielded cells. Shared edges vanish even when their colors differ.
+            for (int row = 0; row < GridModel.Rows; row++)
+            for (int column = 0; column < GridModel.Columns; column++)
+            {
+                var member = grid.Model.At(column, row);
+                if (member == null || !Protects(member.Id)) continue;
+                int source = owners[member.Id];
+                var center = grid.CellPosition(column, row);
+                float half = grid.Spacing / 2;
+                var tl = center + new Vector3(-half, half, 0);
+                var tr = center + new Vector3(half, half, 0);
+                var bl = center + new Vector3(-half, -half, 0);
+                var br = center + new Vector3(half, -half, 0);
+                bool ShieldAt(int x, int y)
+                {
+                    var cell = grid.Model.At(x, y);
+                    return cell != null && Protects(cell.Id);
+                }
+                if (!ShieldAt(column, row - 1)) AddEdge(new Vector2Int(column, row), new Vector2Int(column + 1, row), tl, tr, source);
+                if (!ShieldAt(column + 1, row)) AddEdge(new Vector2Int(column + 1, row), new Vector2Int(column + 1, row + 1), tr, br, source);
+                if (!ShieldAt(column, row + 1)) AddEdge(new Vector2Int(column + 1, row + 1), new Vector2Int(column, row + 1), br, bl, source);
+                if (!ShieldAt(column - 1, row)) AddEdge(new Vector2Int(column, row + 1), new Vector2Int(column, row), bl, tl, source);
+            }
+            TraceContours(0, edges.Count);
             foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
                 enemy.GetComponent<EnemyAbilities>()?.SetGroupShielded(Protects(enemy.Id));
             if (band == null && edges.Count > 0)
@@ -75,7 +101,7 @@ namespace CandyCruisers
                 band.MarkDynamic();
                 child.GetComponent<MeshFilter>().sharedMesh = band;
                 bandRenderer = child.GetComponent<MeshRenderer>();
-                bandRenderer.sharedMaterial = grid.View(edges[0].Owner).Visuals.Body.sharedMaterial;
+                bandRenderer.sharedMaterial = EnemyPresentation.StableEffectMaterial(grid.View(edges[0].Owner).Visuals.Body);
                 bandRenderer.sortingOrder = 14;
             }
             if (band == null) return;
@@ -90,7 +116,6 @@ namespace CandyCruisers
                 {
                     float t = strip / 8f;
                     float inset = Mathf.Lerp(-.0175f, .21f, t);
-                    var tint = new Color(.82f, 1, 1, 1 - Mathf.SmoothStep(0, 1, t));
                     for (int corner = 0; corner < cornerCount; corner++)
                     {
                         var previous = edges[contour[(corner + cornerCount - 1) % cornerCount]];
@@ -98,6 +123,8 @@ namespace CandyCruisers
                         Vector3 previousDirection = (previous.B - previous.A).normalized;
                         Vector3 nextDirection = (next.B - next.A).normalized;
                         vertices.Add(OffsetCorner(next.A, previousDirection, nextDirection, inset));
+                        var tint = Color.Lerp(Tint(previous.Owner), Tint(next.Owner), .5f);
+                        tint.a = 1 - Mathf.SmoothStep(0, 1, t);
                         colors.Add(tint);
                     }
                 }
@@ -211,12 +238,13 @@ namespace CandyCruisers
             }
         }
 
-        public bool FindHit(Vector3 origin, float from, float to, float radius, out int id, out float distance)
+        public bool FindHit(Vector3 origin, float from, float to, float radius, out int id, out float distance, EnemyColor? shotColor = null)
         {
             id = 0;
             distance = float.PositiveInfinity;
             foreach (var edge in edges)
             {
+                if (shotColor.HasValue && !Blocks(edge.Owner, shotColor.Value)) continue;
                 Vector3 a = transform.TransformPoint(edge.A), b = transform.TransformPoint(edge.B);
                 if (origin.x + radius < Mathf.Min(a.x, b.x) - .0175f || origin.x - radius > Mathf.Max(a.x, b.x) + .0175f) continue;
                 float near = Mathf.Min(a.y, b.y) - .0175f - origin.y;

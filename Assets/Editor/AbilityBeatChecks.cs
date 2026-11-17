@@ -98,7 +98,13 @@ namespace CandyCruisers.Editor
                     grid.RefreshSpecials();
                 }
                 var ability = yellow.GetComponent<EnemyAbilities>();
-                Check(ability.BeginImitation(target), "Yellow starts its two-beat transformation");
+                Check(ability.BeginImitation(target), "Yellow starts copying");
+                if (special)
+                {
+                    Check(!ability.IsTransforming && ability.IsDisguised && ability.AbilityColor == EnemyColor.Red && yellow.Color == EnemyColor.Yellow,
+                        "Special Yellow copies immediately while retaining Yellow identity");
+                    return;
+                }
                 music.PreviewTime = 1;
                 ability.Tick(100);
                 Check(ability.IsTransforming, "One beat cannot complete Yellow despite a long frame");
@@ -111,7 +117,7 @@ namespace CandyCruisers.Editor
                 Check(ability.IsTransforming, "Yellow remains transforming until its second beat");
                 music.PreviewTime = 2f / 3;
                 ability.Tick(0);
-                Check(!ability.IsTransforming && (special ? ability.IsDisguised : yellow.Color == EnemyColor.Red),
+                Check(!ability.IsTransforming && (yellow.Color == EnemyColor.Yellow && ability.AbilityColor == EnemyColor.Red),
                     "Regular conversion and special disguise finish exactly at two beats");
             });
         }

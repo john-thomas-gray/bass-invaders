@@ -47,10 +47,11 @@ namespace CandyCruisers
             Fleet.ActivePlan.Columns : RunProgress.RowWidthForLevel(Level);
         public void ApplyAppearance(GridEnemy enemy)
         {
-            var prefab = Prefab(enemy.Color);
+            var color = enemy.GetComponent<EnemyAbilities>()?.AbilityColor ?? enemy.Color;
+            var prefab = Prefab(color);
             if (prefab == null) return;
             var ordinary = prefab.GetComponentInChildren<SpriteRenderer>().sprite;
-            var sprite = AppearanceSprite(enemy.Color, enemy.IsSpecial);
+            var sprite = AppearanceSprite(color, enemy.IsSpecial);
             enemy.Visuals.Body.sprite = sprite;
             enemy.Visuals.Root.localScale = Vector3.one * (ordinary.bounds.size.x / sprite.bounds.size.x);
         }
@@ -90,7 +91,7 @@ namespace CandyCruisers
             if (session != null && (session.State != GameSession.RunState.Playing || session.IsPaused)) return null;
             var colors = SpawnColors();
             if (colors.Count == 0) return null;
-            var candidates = SummonCandidates(grid.Model, source.Color == EnemyColor.Purple && source.IsSpecial);
+            var candidates = SummonCandidates(grid.Model, (source.GetComponent<EnemyAbilities>()?.AbilityColor ?? source.Color) == EnemyColor.Purple && source.IsSpecial);
             foreach (int anchor in new System.Collections.Generic.List<int>(candidates.Keys))
             {
                 candidates[anchor].RemoveAll(cell => !colors.Exists(color => CanSpawn(color, cell.x, cell.y)));
@@ -124,7 +125,7 @@ namespace CandyCruisers
             if (session != null && (session.State != GameSession.RunState.Playing || session.IsPaused)) return false;
             var colors = SpawnColors();
             if (colors.Count == 0) return false;
-            var candidates = SummonCandidates(grid.Model, source.Color == EnemyColor.Purple && source.IsSpecial);
+            var candidates = SummonCandidates(grid.Model, (source.GetComponent<EnemyAbilities>()?.AbilityColor ?? source.Color) == EnemyColor.Purple && source.IsSpecial);
             foreach (int anchor in new System.Collections.Generic.List<int>(candidates.Keys))
             {
                 candidates[anchor].RemoveAll(cell => !colors.Exists(color => CanSpawn(color, cell.x, cell.y)));

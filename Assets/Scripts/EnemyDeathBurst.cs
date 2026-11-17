@@ -44,7 +44,7 @@ namespace CandyCruisers
             copy.transform.rotation = source.transform.rotation;
             effect.snapshot = copy.GetComponent<SpriteRenderer>();
             effect.snapshot.sprite = source.sprite;
-            effect.snapshot.sharedMaterial = source.sharedMaterial;
+            effect.snapshot.sharedMaterial = EnemyPresentation.StableEffectMaterial(source);
             effect.snapshot.sortingOrder = source.sortingOrder;
             effect.snapshot.color = effect.tint;
             var label = new GameObject("Connection depth", typeof(TextMesh));
@@ -74,7 +74,7 @@ namespace CandyCruisers
                 shard.transform.SetParent(root.transform, false);
                 var sprite = shard.GetComponent<SpriteRenderer>();
                 sprite.sprite = colorClear ? EnemyPlaceholderArt.SpaceDust : EnemyPlaceholderArt.Triangle;
-                sprite.sharedMaterial = source.sharedMaterial;
+                sprite.sharedMaterial = EnemyPresentation.StableEffectMaterial(source);
                 sprite.sortingLayerID = source.sortingLayerID;
                 sprite.sortingOrder = colorClear ? source.sortingOrder - 5 : source.sortingOrder + 5;
                 effect.shards[i] = sprite;

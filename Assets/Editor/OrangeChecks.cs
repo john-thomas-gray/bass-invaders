@@ -80,16 +80,15 @@ namespace CandyCruisers.Editor
                 var orange = Add(grid, EnemyColor.Orange, 1, 0);
                 var yellow = Add(grid, EnemyColor.Yellow, 0, 0);
                 var ability = yellow.GetComponent<EnemyAbilities>();
-                Check(!ability.BeginImitation(orange) && !grid.Model.BeginImitation(yellow.Id, orange.Id), "Ordinary Yellow cannot become Orange");
                 Add(grid, EnemyColor.Yellow, 0, 1); Add(grid, EnemyColor.Yellow, 1, 1);
                 grid.RefreshSpecials();
-                Check(yellow.IsSpecial && ability.BeginImitation(orange), "Special Yellow can mimic Orange");
+                Check(yellow.IsSpecial && ability.BeginImitation(orange), "Special Yellow can attach to Orange");
                 ability.Tick(EnemyAbilities.DefaultImitationSeconds);
-                Check(ability.IsDisguised && yellow.Color == EnemyColor.Yellow && grid.Model.ColorCount(EnemyColor.Orange) == 1,
-                    "Disguised Yellow remains logically Yellow beside Orange");
-                Check(yellow.Visuals.Body.sprite == grid.GetComponent<EnemyRowSpawner>().SpecialSprite &&
-                    yellow.Visuals.Body.sprite == orange.Visuals.Body.sprite, "A Yellow disguised as Orange copies its special appearance");
-                Check(ability.RevealDisguise(EnemyColor.Red) && yellow.Color == EnemyColor.Yellow, "Orange disguise reveals normally");
+                Check(ability.IsDisguised && yellow.Color == EnemyColor.Yellow && ability.AbilityColor == EnemyColor.Orange,
+                    "Special Yellow gains Orange color and ability");
+                Check(!ability.RevealDisguise(EnemyColor.Red), "Shots do not reveal a host attachment");
+                grid.ClearMatchingChain(orange.Id, EnemyColor.Orange);
+                Check(grid.View(yellow.Id) == yellow && yellow.Color == EnemyColor.Yellow, "Orange host death reverts special Yellow");
             });
             foreach (int oranges in new[] { 2, 3 })
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>

@@ -22,6 +22,7 @@ namespace CandyCruisers
         private readonly Vector3 origin;
         private readonly float radius, length;
         private readonly bool magic, groupBlocks;
+        private readonly EnemyColor shotColor;
 
         public PlaytestObservation(EnemyGrid grid, PlayerMovement player)
         {
@@ -29,25 +30,23 @@ namespace CandyCruisers
             origin = player.Tongue.transform.position;
             magic = player.ShotActive ? player.Tongue.IsMagic : player.MagicCharges > 0;
             var color = player.ShotActive ? player.Tongue.ShotColor : player.ReadyColor ?? EnemyColor.Red;
+            shotColor = color;
             radius = magic ? TongueShot.MagicHitRadius : TongueShot.NormalHitRadius;
             length = Mathf.Max(.1f, 5.3f - origin.y);
-            groupBlocks = !magic && color != EnemyColor.Blue && grid.GroupShield != null;
-            var groups = new Dictionary<int, HashSet<int>>();
+            groupBlocks = !magic && grid.GroupShield != null;
             var xs = new List<float> { player.transform.position.x };
             foreach (var enemy in grid.GetComponentsInChildren<GridEnemy>())
             {
                 if (!enemy.isActiveAndEnabled || grid.Model.Find(enemy.Id) == null) continue;
-                if (!groups.TryGetValue(enemy.Id, out var group))
-                {
-                    group = new HashSet<int>(grid.Model.MatchingDepths(enemy.Id, enemy.Color).Keys);
-                    foreach (int id in group) groups[id] = group;
-                }
+                var group = new HashSet<int>(grid.Model.MatchingDepths(enemy.Id, magic ? enemy.Color : color,
+                    magic && grid.Model.IsAttached(enemy.Id) && !grid.Model.IsSpecialImitation(enemy.Id)).Keys);
                 var ability = enemy.GetComponent<EnemyAbilities>();
-                bool blocks = !magic && color != EnemyColor.Blue && enemy.Color == EnemyColor.Blue &&
-                    ability != null && ability.isActiveAndEnabled && ability.ShieldActive;
+                bool blocks = !magic && ability != null && ability.isActiveAndEnabled && ability.ShieldActive &&
+                    (ability.YellowBlueShield ? color != EnemyColor.Yellow :
+                    ability.AbilityColor == EnemyColor.Blue && color != EnemyColor.Blue && color != enemy.Color);
                 bool groupProtected = groupBlocks && grid.GroupShield.Protects(enemy.Id);
-                // Disguised Yellow reveals and lets a non-Yellow ordinary shot continue.
-                bool matches = magic || enemy.Color == color;
+                bool reveals = !magic && ability != null && ability.IsDisguised && !ability.YellowBlueShield && color == ability.AbilityColor;
+                bool matches = !reveals && (magic || grid.Model.MatchesShot(enemy.Id, color));
                 var bounds = blocks && !groupProtected ? ability.ShieldBounds : enemy.HitBounds;
                 targets.Add(new Target { id = enemy.Id, bounds = bounds, matches = matches,
                     blocks = blocks && !groupProtected, group = group });
@@ -106,7 +105,7 @@ namespace CandyCruisers
                 { first = Mathf.Max(0, bounds.min.y - origin.y); nearest = target; }
             }
             if (magic) return removed.Count;
-            if (groupBlocks && grid.GroupShield.FindHit(new Vector3(x, origin.y, origin.z), 0, length, radius + aimMargin, out _, out float shield) && shield <= first)
+            if (groupBlocks && grid.GroupShield.FindHit(new Vector3(x, origin.y, origin.z), 0, length, radius + aimMargin, out _, out float shield, shotColor) && shield <= first)
                 return 0;
             return nearest != null && !nearest.blocks && nearest.matches ? nearest.group.Count : 0;
         }

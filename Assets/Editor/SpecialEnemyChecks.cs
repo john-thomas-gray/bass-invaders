@@ -102,10 +102,10 @@ namespace CandyCruisers.Editor
             model.TryAdd(6, EnemyColor.Yellow, 3, 1);
             model.BeginImitation(6, 3);
             var depths = model.MatchingDepths(1, EnemyColor.Red);
-            Check(depths[1] == 1 && depths[2] == 2 && depths[3] == 2 && depths[4] == 2 && depths[5] == 3 && depths[6] == 3,
-                "Death digits use shortest connection depth, including branches, loops and Yellow links");
+            Check(depths[1] == 1 && depths[2] == 2 && depths[3] == 2 && depths[4] == 2 && depths[5] == 3 && !depths.ContainsKey(6),
+                "Death digits use shortest real-color connections without crossing into Yellow groups");
             Check(model.MatchingDepths(1, EnemyColor.Blue).Count == 0 && model.Count == 6, "Depth preview neither kills nor accepts a mismatch");
-            Check(model.ClearMatchingChain(1, EnemyColor.Red).Count == 6 && model.Count == 0, "Every planned branch clears exactly once");
+            Check(model.ClearMatchingChain(1, EnemyColor.Red).Count == 5 && model.Count == 1, "Every planned branch clears exactly once");
 
             Fixture((grid, player, tongue) =>
             {
@@ -421,23 +421,11 @@ namespace CandyCruisers.Editor
                 var target = Add(grid, EnemyColor.Purple, 0, 1);
                 grid.RefreshSpecials();
                 var ability = yellow.GetComponent<EnemyAbilities>();
-                Check(ability.BeginImitation(target), "Special Yellow starts its organic disguise");
-                ability.Tick(.5f);
-                var lines = yellow.GetComponentsInChildren<LineRenderer>()
-                    .Where(line => line.name.StartsWith("Disguise feeding tendril")).ToArray();
-                Check(lines.Length == 5 && lines.All(line => line.enabled && line.positionCount == 25),
-                    "Special Yellow draws multiple curved feeding tendrils");
-                Check(!grid.Model.TryGetImitationTarget(yellow.Id, out _),
-                    "Feeding artwork does not create a regular Yellow combat link");
-                var before = lines[0].colorGradient.colorKeys.Select(key => key.color).ToArray();
-                ability.Tick(.25f);
-                Check(!lines[0].colorGradient.colorKeys.Select(key => key.color).SequenceEqual(before),
-                    "Neighbor color visibly travels through the tendrils");
-                ability.Tick(EnemyAbilities.DefaultImitationSeconds - .75f);
-                Check(!ability.IsTransforming && ability.IsDisguised && lines.All(line => !line.enabled),
-                    "Tendrils end at the normal imitation duration while the disguise remains");
-                ability.RevealDisguise(EnemyColor.Red);
-                Check(lines.All(line => !line.enabled), "Revealing a disguise leaves no feeding artwork behind");
+                Check(ability.BeginImitation(target) && !ability.IsTransforming && ability.IsDisguised &&
+                    ability.AbilityColor == EnemyColor.Purple && yellow.Color == EnemyColor.Yellow,
+                    "Special Yellow copies Purple immediately, keeping its true Yellow identity");
+                Check(ability.RevealDisguise(EnemyColor.Purple) && !ability.IsDisguised,
+                    "Host-color hit reveals and detaches the special mimic");
             });
         }
 

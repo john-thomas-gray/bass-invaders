@@ -22,6 +22,12 @@ namespace CandyCruisers
         private readonly Occupant[,] cells = new Occupant[Columns, Rows];
         private readonly Dictionary<int, Occupant> enemies = new Dictionary<int, Occupant>();
         private readonly Dictionary<int, int> imitationLinks = new Dictionary<int, int>();
+        private readonly HashSet<int> specialImitations = new HashSet<int>();
+        private readonly HashSet<int> completedImitations = new HashSet<int>();
+        private readonly Dictionary<int, EnemyColor> copiedColors = new Dictionary<int, EnemyColor>();
+        public EnemyColor? CopiedColor(int id) => copiedColors.TryGetValue(id, out var color) ? color : (EnemyColor?)null;
+        public bool IsSpecialImitation(int id) => specialImitations.Contains(id);
+        public bool IsAttached(int id) => completedImitations.Contains(id);
         public FleetState Fleet { get; }
         public GridModel() => Fleet = new FleetState(this);
         public int Count => enemies.Count;
@@ -93,10 +99,12 @@ namespace CandyCruisers
             return false;
         }
 
+        private EnemyColor AbilityColor(Occupant enemy) => IsAttached(enemy.Id) && TryGetImitationTarget(enemy.Id, out var host) ? host.Color : enemy.Color;
+
         public List<Occupant> OrangeSwapTargets(int id)
         {
             var result = new List<Occupant>();
-            if (!enemies.TryGetValue(id, out var orange) || orange.Color != EnemyColor.Orange) return result;
+            if (!enemies.TryGetValue(id, out var orange) || AbilityColor(orange) != EnemyColor.Orange) return result;
             foreach (var candidate in enemies.Values)
             {
                 if (candidate.Color == EnemyColor.Orange || MatchingDepths(candidate.Id, candidate.Color).Count != 1 ||
@@ -122,12 +130,74 @@ namespace CandyCruisers
             return true;
         }
 
-        public bool BeginImitation(int id, int targetId)
+        public List<Occupant> ImitationTargets(int id)
         {
-            if (!enemies.TryGetValue(id, out var enemy) || !enemies.TryGetValue(targetId, out var target) ||
-                enemy.Color != EnemyColor.Yellow || target.Color == EnemyColor.Yellow || target.Color == EnemyColor.Orange || imitationLinks.ContainsKey(id) ||
+            var result = new List<Occupant>();
+            var enemy = Find(id);
+            if (enemy == null) return result;
+            foreach (var neighbor in Neighbors(enemy.Column, enemy.Row))
+                if (neighbor.Color != EnemyColor.Yellow || IsAttached(neighbor.Id) && HasHostConnection(neighbor.Id)) result.Add(neighbor);
+            return result;
+        }
+
+        public bool BeginImitation(int id, int targetId, bool special = false)
+        {
+            var enemy = Find(id); var target = Find(targetId);
+            if (enemy == null || target == null || enemy.Color != EnemyColor.Yellow || imitationLinks.ContainsKey(id) ||
                 Math.Abs(enemy.Column - target.Column) + Math.Abs(enemy.Row - target.Row) != 1) return false;
-            imitationLinks.Add(id, targetId);
+            if (IsAttached(targetId) && !HasHostConnection(targetId)) return false;
+            EnemyColor color = IsAttached(targetId) ? copiedColors[targetId] : target.Color;
+            if (color == EnemyColor.Yellow) return false;
+            int hostId = IsAttached(targetId) ? imitationLinks[targetId] : targetId;
+            imitationLinks.Add(id, hostId);
+            copiedColors.Add(id, color);
+            if (special) { specialImitations.Add(id); completedImitations.Add(id); }
+            return true;
+        }
+
+        public bool HasHostConnection(int id)
+        {
+            if (!IsAttached(id) || !TryGetImitationTarget(id, out var host) || !copiedColors.TryGetValue(id, out var color) || host.Color != color) return false;
+            var seen = new HashSet<int> { id };
+            var pending = new Queue<Occupant>();
+            pending.Enqueue(Find(id));
+            while (pending.Count > 0)
+            {
+                var current = pending.Dequeue();
+                foreach (var neighbor in Neighbors(current.Column, current.Row))
+                {
+                    if (neighbor.Id == host.Id) return true;
+                    if (neighbor.Color != color && (!IsAttached(neighbor.Id) || copiedColors[neighbor.Id] != color)) continue;
+                    if (seen.Add(neighbor.Id)) pending.Enqueue(neighbor);
+                }
+            }
+            return false;
+        }
+
+        // Left, right, up, down. Coverage is a union of half-sprites, not a blended tint.
+        public int HostCoverage(int id)
+        {
+            var enemy = Find(id);
+            if (enemy == null || !IsAttached(id)) return 0;
+            EnemyColor color = copiedColors[id];
+            int mask = 0;
+            foreach (var neighbor in Neighbors(enemy.Column, enemy.Row))
+            {
+                EnemyColor shown = IsAttached(neighbor.Id) ? copiedColors[neighbor.Id] : neighbor.Color;
+                if (shown != color) continue;
+                mask |= neighbor.Column < enemy.Column ? 1 : neighbor.Column > enemy.Column ? 2 : neighbor.Row < enemy.Row ? 4 : 8;
+            }
+            return mask;
+        }
+        public bool ConvertIfCovered(int id)
+        {
+            int mask = HostCoverage(id);
+            if (IsSpecialImitation(id) || (mask & 3) != 3 && (mask & 12) != 12) return false;
+            var enemy = Find(id);
+            EnemyColor color = copiedColors[id];
+            CancelImitation(id);
+            enemy.Color = color;
+            Fleet.Observe(color);
             return true;
         }
 
@@ -137,13 +207,38 @@ namespace CandyCruisers
             return imitationLinks.TryGetValue(id, out int targetId) && enemies.TryGetValue(targetId, out target);
         }
 
-        public void CancelImitation(int id) => imitationLinks.Remove(id);
+        public void CancelImitation(int id)
+        {
+            imitationLinks.Remove(id);
+            copiedColors.Remove(id);
+            specialImitations.Remove(id);
+            completedImitations.Remove(id);
+        }
+
+        public bool PromoteImitation(int id)
+        {
+            if (!imitationLinks.ContainsKey(id)) return false;
+            specialImitations.Add(id);
+            completedImitations.Add(id);
+            return true;
+        }
+
+        public bool CompleteImitation(int id)
+        {
+            if (!TryGetImitationTarget(id, out var host)) return false;
+            completedImitations.Add(id);
+            return true;
+        }
 
         private void RemoveImitationLinks(int id)
         {
-            imitationLinks.Remove(id);
+            CancelImitation(id);
             foreach (var source in new List<int>(imitationLinks.Keys))
-                if (imitationLinks[source] == id) imitationLinks.Remove(source);
+                if (imitationLinks[source] == id)
+                {
+                    if (specialImitations.Contains(source)) enemies[source].Color = EnemyColor.Yellow;
+                    CancelImitation(source);
+                }
         }
 
         public bool CanDescend
@@ -202,36 +297,103 @@ namespace CandyCruisers
             return true;
         }
 
-        public Dictionary<int, int> MatchingDepths(int id, EnemyColor shotColor)
+        public bool MatchesShot(int id, EnemyColor shotColor)
+        {
+            var enemy = Find(id);
+            if (enemy == null) return false;
+            return enemy.Color == shotColor || IsAttached(id) && copiedColors[id] == shotColor;
+        }
+
+        public bool RevertImitation(int id)
+        {
+            if (!imitationLinks.ContainsKey(id)) return false;
+            CancelImitation(id);
+            return true;
+        }
+
+        public int PromotionCount(List<Occupant> group)
+        {
+            if (group.Count == 0 || group[0].Color == EnemyColor.Yellow) return group.Count;
+            var component = HostComponentDepths(group[0].Id);
+            int hosts = 0;
+            foreach (int member in component.Keys)
+                if (Find(member).Color != EnemyColor.Yellow) hosts++;
+            return hosts >= 2 ? component.Count : hosts;
+        }
+
+        // A copied-color junction can connect real hosts which do not touch each other.
+        // Keep this separate from ColorGroup so Yellow identity and Yellow shot groups stay intact.
+        private Dictionary<int, int> HostComponentDepths(int id)
         {
             var depths = new Dictionary<int, int>();
-            if (!enemies.TryGetValue(id, out var first) || first.Color != shotColor) return depths;
-            depths.Add(id, 1);
+            var first = Find(id);
+            if (first == null || first.Color == EnemyColor.Yellow && (!IsAttached(id) || !HasHostConnection(id))) return depths;
+            EnemyColor color = IsAttached(id) ? copiedColors[id] : first.Color;
             var pending = new Queue<Occupant>();
-            pending.Enqueue(first);
-            void Visit(Occupant next, int depth)
-            {
-                if (depths.ContainsKey(next.Id)) return;
-                depths.Add(next.Id, depth);
-                pending.Enqueue(next);
-            }
+            depths.Add(id, 1); pending.Enqueue(first);
             while (pending.Count > 0)
             {
-                var enemy = pending.Dequeue();
-                int nextDepth = depths[enemy.Id] + 1;
-                foreach (var neighbor in Neighbors(enemy.Column, enemy.Row))
-                    if (neighbor.Color == enemy.Color) Visit(neighbor, nextDepth);
-                // Active tendrils connect both color groups before any removals occur.
-                if (TryGetImitationTarget(enemy.Id, out var target)) Visit(target, nextDepth);
-                foreach (var link in imitationLinks)
-                    if (link.Value == enemy.Id) Visit(enemies[link.Key], nextDepth);
+                var current = pending.Dequeue();
+                foreach (var neighbor in Neighbors(current.Column, current.Row))
+                {
+                    if (depths.ContainsKey(neighbor.Id)) continue;
+                    if (neighbor.Color != color && (!IsAttached(neighbor.Id) || copiedColors[neighbor.Id] != color || !HasHostConnection(neighbor.Id))) continue;
+                    depths.Add(neighbor.Id, depths[current.Id] + 1);
+                    pending.Enqueue(neighbor);
+                }
             }
             return depths;
         }
 
-        public List<int> ClearMatchingChain(int id, EnemyColor shotColor)
+        public List<Occupant> HostGroup(int id)
         {
-            var cleared = new List<int>(MatchingDepths(id, shotColor).Keys);
+            var result = new List<Occupant>();
+            foreach (int member in HostComponentDepths(id).Keys)
+                if (Find(member).Color != EnemyColor.Yellow) result.Add(Find(member));
+            return result;
+        }
+
+        public Dictionary<int, int> MatchingDepths(int id, EnemyColor shotColor, bool magicMimic = false)
+        {
+            var depths = new Dictionary<int, int>();
+            var first = Find(id);
+            if (first == null) return depths;
+            var pending = new Queue<Occupant>();
+            void Visit(Occupant enemy, int depth)
+            {
+                if (depths.ContainsKey(enemy.Id)) return;
+                depths.Add(enemy.Id, depth); pending.Enqueue(enemy);
+            }
+            if (magicMimic && IsAttached(id) && !IsSpecialImitation(id))
+            {
+                Visit(first, 1);
+                foreach (var member in HostComponentDepths(id))
+                    if (Find(member.Key).Color != EnemyColor.Yellow) Visit(Find(member.Key), member.Value);
+            }
+            else if (IsAttached(id) && shotColor != EnemyColor.Yellow)
+            {
+                if (IsSpecialImitation(id) || copiedColors[id] != shotColor) return depths;
+                depths.Add(id, 1); // Deliberately never enqueue the mimic into yellow traversal.
+                foreach (var member in HostComponentDepths(id))
+                    if (Find(member.Key).Color != EnemyColor.Yellow) Visit(Find(member.Key), member.Value);
+            }
+            else
+            {
+                if (first.Color != shotColor) return depths;
+                Visit(first, 1);
+            }
+            while (pending.Count > 0)
+            {
+                var enemy = pending.Dequeue();
+                foreach (var neighbor in Neighbors(enemy.Column, enemy.Row))
+                    if (neighbor.Color == enemy.Color) Visit(neighbor, depths[enemy.Id] + 1);
+            }
+            return depths;
+        }
+
+        public List<int> ClearMatchingChain(int id, EnemyColor shotColor, bool magicMimic = false)
+        {
+            var cleared = new List<int>(MatchingDepths(id, shotColor, magicMimic).Keys);
             // Discover the whole group before removal changes its connectivity.
             foreach (int clearedId in cleared) Remove(clearedId);
             return cleared;
@@ -279,14 +441,7 @@ namespace CandyCruisers
             return result;
         }
 
-        public List<EnemyColor> SelectablePlayerColors()
-        {
-            var result = AvailableColors();
-            foreach (var enemy in enemies.Values)
-                if (enemy.Color == EnemyColor.Yellow && !imitationLinks.ContainsKey(enemy.Id)) return result;
-            result.Remove(EnemyColor.Yellow);
-            return result;
-        }
+        public List<EnemyColor> SelectablePlayerColors() => AvailableColors();
 
         public IEnumerable<Occupant> Neighbors(int column, int row)
         {

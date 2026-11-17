@@ -31,17 +31,6 @@
             "Blue"
           ],
           "initialFleet": [
-            "b0bb0b",
-            "r0rr0r"
-          ],
-          "lineSpawns": []
-        },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue"
-          ],
-          "initialFleet": [
             "r0rr0r",
             "b0bb0b"
           ],
@@ -55,17 +44,6 @@
           "initialFleet": [
             "rrbbrr",
             "bbrrbb"
-          ],
-          "lineSpawns": []
-        },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue"
-          ],
-          "initialFleet": [
-            "bbrrbb",
-            "rrbbrr"
           ],
           "lineSpawns": []
         },
@@ -544,17 +522,22 @@
             "Orange"
           ],
           "initialFleet": [
-            "******",
-            "******",
-            "******",
-            "******",
-            "******"
-
+            "*****",
+            "*****",
+            "*****",
+            "*****",
+            "*****"
           ],
           "lineSpawns": [
-            "******"
+            "*****"
           ]
-        },
+        }
+      ]
+    },
+    "8": {
+      "backgroundImage": "",
+      "possibleSoundtrackTracks": [],
+      "fleets": [
         {
           "possibleColors": [
             "Red",
@@ -570,55 +553,11 @@
             "******",
             "******",
             "******"
-
-          ],
-          "lineSpawns": [
-            "******"
-          ]
-        },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue",
-            "Green",
-            "Purple",
-            "Yellow",
-            "Orange"
-          ],
-          "initialFleet": [
-            "******",
-            "******",
-            "******",
-            "******",
-            "******"
-
-          ],
-          "lineSpawns": [
-            "******"
-          ]
-        },
-        {
-          "possibleColors": [
-            "Red",
-            "Blue",
-            "Green",
-            "Purple",
-            "Yellow",
-            "Orange"
-          ],
-          "initialFleet": [
-            "******",
-            "******",
-            "******",
-            "******",
-            "******"
-
           ],
           "lineSpawns": [
             "******"
           ]
         }
-        
       ]
     }
   }

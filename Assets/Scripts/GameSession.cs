@@ -685,7 +685,7 @@ namespace CandyCruisers
         }
 
         private bool ShotPreservesCombo => player != null && player.Tongue != null &&
-            player.Tongue.HitRegularShield && !player.Tongue.LastCompletionCancelled;
+            player.Tongue.HitRegularShield && !player.Tongue.RevealedYellow && !player.Tongue.LastCompletionCancelled;
 
         private void OnShotRetractionStarted(bool hit)
         {

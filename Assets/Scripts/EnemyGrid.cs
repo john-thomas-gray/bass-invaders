@@ -21,12 +21,27 @@ namespace CandyCruisers
             {
                 int count = 0;
                 foreach (var enemy in views.Values)
-                    if (enemy != null && enemy.isActiveAndEnabled && enemy.IsSpecial && enemy.Color == EnemyColor.Green)
+                    if (enemy != null && enemy.isActiveAndEnabled && enemy.IsSpecial && (enemy.GetComponent<EnemyAbilities>()?.AbilityColor ?? enemy.Color) == EnemyColor.Green)
                         count++;
                 return count;
             }
         }
-        public int RegularGreenCount => Mathf.Max(0, Fleet.ColorCount(EnemyColor.Green) - SpecialGreenCount);
+        public int RegularGreenCount
+        {
+            get
+            {
+                int count = 0;
+                for (int row = 0; row < GridModel.Rows; row++)
+                for (int column = 0; column < GridModel.Columns; column++)
+                {
+                    var cell = Model.At(column, row);
+                    if (cell == null) continue;
+                    var view = View(cell.Id);
+                    if ((view?.GetComponent<EnemyAbilities>()?.AbilityColor ?? cell.Color) == EnemyColor.Green && view?.IsSpecial != true) count++;
+                }
+                return count;
+            }
+        }
         public int ActiveGreenTempoCount
         {
             get
@@ -59,7 +74,6 @@ namespace CandyCruisers
         public event System.Action<EnemyColor> ColorCleared;
         public event System.Action<List<EnemyColor>> ColorClearStreakReset;
         public event System.Action<EnemyColor> EnemyDestroyed;
-        public event System.Action LastYellowTransformed;
         public event System.Action<int, bool, int> MatchCleared;
         public event System.Action<EnemyColor> MatchColorScored;
         public event System.Action<int, bool, int> OrangeBurstCleared;
@@ -84,13 +98,17 @@ namespace CandyCruisers
                     occupiedRows.Add(row);
                     if (allowedColumns != null && (column >= allowedColumns.Length || !allowedColumns[column])) continue;
                     int weight = row + 1;
-                    if (barrier != null && enemy.Color == EnemyColor.Blue) weight *= 2;
-                    weights.TryGetValue(enemy.Color, out int previous);
-                    weights[enemy.Color] = previous + weight;
-                    if (enemy.Color == EnemyColor.Yellow && Model.TryGetImitationTarget(enemy.Id, out _)) continue;
-                    if (enemy.Color != EnemyColor.Blue &&
-                        (barrier != null && row <= barrier[column] || IsSpecialBlue(Model.At(column, row + 1)))) continue;
-                    eligible.Add(enemy.Color);
+                    void AddChoice(EnemyColor color, bool selectable)
+                    {
+                        int amount = barrier != null && color == EnemyColor.Blue ? weight * 2 : weight;
+                        weights.TryGetValue(color, out int previous);
+                        weights[color] = previous + amount;
+                        if (!selectable) return;
+                        if (color != EnemyColor.Blue && (barrier != null && row <= barrier[column] || IsSpecialBlue(Model.At(column, row + 1)))) return;
+                        eligible.Add(color);
+                    }
+                    AddChoice(enemy.Color, true);
+                    if (Model.IsAttached(enemy.Id) && !Model.IsSpecialImitation(enemy.Id)) AddChoice(Model.CopiedColor(enemy.Id).Value, true);
                 }
             foreach (var color in new List<EnemyColor>(weights.Keys))
                 if (!eligible.Contains(color)) weights.Remove(color);
@@ -153,6 +171,7 @@ namespace CandyCruisers
         {
             TickRetreat(Time.deltaTime);
             RefreshSpecials();
+            RefreshMimicCoverage();
         }
 
         public void RefreshSpecials()
@@ -162,11 +181,12 @@ namespace CandyCruisers
             {
                 if (enemy == null || enemy.Color == EnemyColor.Orange || !visited.Add(enemy.Id)) continue;
                 var group = Model.ColorGroup(enemy.Id);
+                bool promotes = Model.PromotionCount(group) >= 3;
                 foreach (var member in group)
                 {
                     visited.Add(member.Id);
                     var view = View(member.Id);
-                    if (group.Count < 3 || view.IsSpecial) continue;
+                    if (!promotes || view.IsSpecial) continue;
                     view.Promote();
                     view.GetComponent<EnemyAbilities>()?.OnPromoted();
                     if (view.GetComponent<EnemyAbilities>()?.IsTransforming == true) continue;
@@ -339,18 +359,34 @@ namespace CandyCruisers
         {
             var enemy = View(id);
             if (enemy == null) return 0;
-            var depths = Model.MatchingDepths(id, enemy.Color);
+            var color = enemy.Color;
+            bool magicMimic = Model.IsAttached(id) && !Model.IsSpecialImitation(id);
+            var depths = Model.MatchingDepths(id, color, magicMimic);
             int addedDepth = 0;
             if (depths.Count >= 3)
                 foreach (int depth in depths.Values) addedDepth = Mathf.Max(addedDepth, depth);
-            ClearMatchingChain(id, enemy.Color, multiplierBefore);
+            ClearMatchingChain(id, color, multiplierBefore, magicMimic: magicMimic);
             return addedDepth;
         }
 
-        public int ClearMatchingChain(int id, EnemyColor color, int? magicOffset = null, bool orangeBurst = false)
+        public int ClearMatchingChain(int id, EnemyColor color, int? magicOffset = null, bool orangeBurst = false, bool magicMimic = false)
         {
-            var depths = Model.MatchingDepths(id, color);
-            var cleared = Model.ClearMatchingChain(id, color);
+            var depths = Model.MatchingDepths(id, color, magicMimic);
+            var reverting = new List<GridEnemy>();
+            var affectedHosts = new HashSet<int>();
+            foreach (var view in views.Values)
+            {
+                if (!Model.TryGetImitationTarget(view.Id, out var host)) continue;
+                if (depths.ContainsKey(host.Id) && !depths.ContainsKey(view.Id)) reverting.Add(view);
+                var hostGroup = Model.HostGroup(view.Id);
+                bool losesSupport = depths.ContainsKey(view.Id) || depths.ContainsKey(host.Id);
+                foreach (var member in hostGroup)
+                    if (depths.ContainsKey(member.Id)) losesSupport = true;
+                if (losesSupport)
+                    foreach (var member in hostGroup)
+                        if (!depths.ContainsKey(member.Id)) affectedHosts.Add(member.Id);
+            }
+            var cleared = Model.ClearMatchingChain(id, color, magicMimic);
             bool earnsMultipliers = cleared.Count >= 3;
             var multipliers = new Dictionary<int, int>(depths);
             if (orangeBurst)
@@ -382,6 +418,9 @@ namespace CandyCruisers
                 if (Application.isPlaying) Destroy(enemy.gameObject);
                 else DestroyImmediate(enemy.gameObject);
             }
+            foreach (var survivor in reverting)
+                survivor.GetComponent<EnemyAbilities>()?.OnHostKilled();
+            DemoteUnsupportedHostGroups(affectedHosts);
             if (cleared.Count > 0)
             {
                 if (groupShield != null) groupShield.Refresh(this);
@@ -411,11 +450,77 @@ namespace CandyCruisers
         {
             joinedGroup = new List<int>();
             if (!Model.TryGetImitationTarget(id, out var target)) return false;
-            if (!SetColor(id, target.Color)) return false;
+            if (!Model.CompleteImitation(id)) return false;
             foreach (var member in Model.ColorGroup(id)) joinedGroup.Add(member.Id);
-            // Conversion is not a kill: no reward, clear bar, or spawn exclusion.
-            if (Fleet.ColorCount(EnemyColor.Yellow) == 0) LastYellowTransformed?.Invoke();
             return true;
+        }
+
+        public void RefreshMimicCoverage()
+        {
+            // Detach unsupported chains to a fixed point before counting any promotion support.
+            bool detached;
+            do
+            {
+                detached = false;
+                foreach (var view in new List<GridEnemy>(views.Values))
+                {
+                    if (!Model.IsAttached(view.Id) || Model.HasHostConnection(view.Id)) continue;
+                    if (!Model.TryGetImitationTarget(view.Id, out var host)) continue;
+                    Model.RevertImitation(view.Id);
+                    view.GetComponent<EnemyAbilities>()?.OnHostKilled();
+                    DemoteUnsupportedHostGroups(new[] { host.Id });
+                    detached = true;
+                }
+            } while (detached);
+            foreach (var view in new List<GridEnemy>(views.Values))
+            {
+                if (!Model.IsAttached(view.Id)) continue;
+                if (Model.IsSpecialImitation(view.Id)) continue;
+                if (Model.ConvertIfCovered(view.Id))
+                {
+                    view.SetColor(Model.Find(view.Id).Color);
+                    view.GetComponent<EnemyAbilities>()?.RefreshIdentity();
+                    RefreshSpecials();
+                }
+            }
+            if (groupShield != null) groupShield.Refresh(this);
+        }
+
+        public bool RevealImitation(int id)
+        {
+            if (!Model.IsAttached(id) || !Model.IsSpecialImitation(id) || !Model.TryGetImitationTarget(id, out _)) return false;
+            var previousGroup = Model.HostGroup(id);
+            if (!Model.RevertImitation(id)) return false;
+            var mimic = View(id);
+            mimic.SetImitationColor(EnemyColor.Yellow);
+            mimic.GetComponent<EnemyAbilities>()?.OnHostKilled();
+            RefreshMimicCoverage();
+            var affectedHosts = new List<int>();
+            foreach (var previous in previousGroup)
+                if (previous.Id != id) affectedHosts.Add(previous.Id);
+            DemoteUnsupportedHostGroups(affectedHosts);
+            RefreshSpecials();
+            return true;
+        }
+
+        private void DemoteUnsupportedHostGroups(IEnumerable<int> candidates)
+        {
+            var visited = new HashSet<int>();
+            foreach (int candidate in candidates)
+            {
+                if (Model.Find(candidate) == null || !visited.Add(candidate)) continue;
+                var group = Model.ColorGroup(candidate);
+                foreach (var member in group) visited.Add(member.Id);
+                if (Model.PromotionCount(group) >= 3) continue;
+                foreach (var member in group)
+                {
+                    var view = View(member.Id);
+                    if (view == null || !view.IsSpecial || Model.IsSpecialImitation(member.Id)) continue;
+                    view.Demote();
+                    view.GetComponent<EnemyAbilities>()?.OnDemoted();
+                    GetComponent<EnemyRowSpawner>()?.ApplyAppearance(view);
+                }
+            }
         }
 
         public void BeginYellowGroupPulse(IEnumerable<int> joinedGroup, float arrivalSeconds, float returnSeconds)
@@ -429,21 +534,21 @@ namespace CandyCruisers
             id = 0;
             hitLength = float.PositiveInfinity;
             bool found = false;
-            if (groupShield != null && !magic && color != EnemyColor.Blue)
+            if (groupShield != null && !magic)
             {
                 groupShield.Refresh(this);
-                found = groupShield.FindHit(origin, fromLength, toLength, radius, out id, out hitLength);
+                found = groupShield.FindHit(origin, fromLength, toLength, radius, out id, out hitLength, color);
             }
             foreach (var pair in views)
             {
                 var enemy = pair.Value;
                 if (enemy == null || !enemy.isActiveAndEnabled) continue;
                 var abilities = enemy.GetComponent<EnemyAbilities>();
-                bool blocked = !magic && enemy.Color == EnemyColor.Blue && color != EnemyColor.Blue &&
-                    abilities != null && abilities.isActiveAndEnabled && abilities.ShieldActive;
+                bool blocked = !magic && abilities != null && abilities.isActiveAndEnabled && abilities.ShieldActive &&
+                    (abilities.YellowBlueShield ? color != EnemyColor.Yellow :
+                    abilities.AbilityColor == EnemyColor.Blue && color != EnemyColor.Blue && color != enemy.Color);
                 if (blocked && groupShield != null && groupShield.Protects(enemy.Id)) continue;
-                if (!magic && enemy.Color != color && !blocked &&
-                    !(abilities != null && abilities.isActiveAndEnabled && abilities.IsDisguised)) continue;
+                if (!magic && !Model.MatchesShot(enemy.Id, color) && !blocked) continue;
                 var bounds = blocked ? abilities.ShieldBounds : enemy.HitBounds;
                 if (origin.x + radius < bounds.min.x || origin.x - radius > bounds.max.x) continue;
                 float near = bounds.min.y - origin.y;
@@ -458,18 +563,27 @@ namespace CandyCruisers
             return found;
         }
 
-        public enum TongueHitResult { Stopped, Deflected, PassThrough, ShieldAbsorbed }
+        public enum TongueHitResult { Stopped, Deflected, PassThrough, ShieldAbsorbed, Revealed }
 
         public TongueHitResult ResolveTongueHit(int id, EnemyColor color, bool magic = false)
         {
             if (!views.TryGetValue(id, out var enemy)) return TongueHitResult.PassThrough;
-            if (!magic && color != EnemyColor.Blue && groupShield != null)
+            if (magic) { ClearMagicChain(id, 0); return TongueHitResult.Stopped; }
+            var mimic = enemy.GetComponent<EnemyAbilities>();
+            if (Model.IsAttached(id))
+            {
+                if (mimic != null && mimic.YellowBlueShield && mimic.ShieldActive && color != EnemyColor.Yellow)
+                    return TongueHitResult.Deflected;
+                if (color == EnemyColor.Yellow) { ClearMatchingChain(id, EnemyColor.Yellow); return TongueHitResult.Stopped; }
+                if (mimic != null && mimic.RevealDisguise(color)) return TongueHitResult.Revealed;
+            }
+            if (!magic && groupShield != null)
             {
                 groupShield.Refresh(this);
-                if (groupShield.Protects(id)) return TongueHitResult.Deflected;
+                if (groupShield.Blocks(id, color)) return TongueHitResult.Deflected;
             }
             var abilities = enemy.GetComponent<EnemyAbilities>();
-            if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.RevealDisguise(color)) return TongueHitResult.PassThrough;
+            if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.RevealDisguise(color)) return TongueHitResult.Revealed;
             if (!magic && abilities != null && abilities.isActiveAndEnabled && abilities.Absorb(color))
                 return enemy.IsSpecial ? TongueHitResult.Stopped : TongueHitResult.ShieldAbsorbed;
             if (magic) ClearMagicChain(id, 0);

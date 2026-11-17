@@ -15,8 +15,12 @@ namespace CandyCruisers.Editor
             foreach (bool hitYellow in new[] { false, true }) CheckYellowLink(magic, hitYellow);
             foreach (float step in new[] { .001f, .016f, .1f, 2f })
             foreach (bool special in new[] { false, true }) CheckShieldCombo(step, special);
+            foreach (float step in new[] { .001f, .016f, .1f, 2f })
+            foreach (EnemyColor color in new[] { EnemyColor.Red, EnemyColor.Green, EnemyColor.Purple, EnemyColor.Orange })
+            foreach (int finish in new[] { 0, 1, 2 })
+            foreach (bool multiple in new[] { false, true }) CheckRevealCombo(step, color, finish, multiple);
             CheckDamageReset();
-            Debug.Log("Shot color combo checks passed: immediate per-color streaks, next-contact scoring, repeated colors, Yellow links, regular shield preservation, special shield breaks, frame timing, fleet clears and damage reset.");
+            Debug.Log("Shot color combo checks passed: per-color streaks, reveal pass-through, matching hits beyond reveals, shield rules, frame timing, misses and damage reset.");
         }
 
         private static void CheckShieldCombo(float step, bool special)
@@ -78,6 +82,75 @@ namespace CandyCruisers.Editor
                 tongue.Tick(2, grid);
                 Check(!tongue.Active && session.Progress.ComboStreak == 0 && session.ComboBreak.Active,
                     "A later real miss still breaks the combo");
+            });
+        }
+
+        private static void CheckRevealCombo(float step, EnemyColor color, int finish, bool multiple)
+        {
+            WithSession((grid, player, tongue, session) =>
+            {
+                var music = grid.GetComponent<GameplayMusicPlayer>();
+                music.Source.Stop(); music.Source.clip = null;
+                var host = Add(grid, color, 3, 3);
+                player.RefreshColor(true);
+                Check(player.ReadyColor == color, "Reveal shot begins with the host color");
+                var mimic = Add(grid, EnemyColor.Yellow, 2, 3);
+                Add(grid, EnemyColor.Yellow, 1, 3); Add(grid, EnemyColor.Yellow, 0, 3);
+                var upper = multiple ? Add(grid, EnemyColor.Yellow, 2, 2) : null;
+                var upperHost = multiple ? Add(grid, color, color == EnemyColor.Orange ? 1 : 3, 2) : null;
+                grid.RefreshSpecials();
+                var ability = mimic.GetComponent<EnemyAbilities>();
+                Check(ability.BeginImitation(host), "Special Yellow hides before the reveal shot");
+                if (multiple) Check(upper.GetComponent<EnemyAbilities>().BeginImitation(upperHost), "A second special Yellow hides in the same lane");
+                bool hitBehind = finish == 1;
+                var behind = finish == 0 ? null : Add(grid, hitBehind ? color : EnemyColor.Blue, 2, 0);
+                if (finish == 2)
+                {
+                    var shield = behind.GetComponent<EnemyAbilities>();
+                    shield.Tick(shield.CooldownRemaining + .35f);
+                    Check(shield.ShieldActive, "A regular shield waits beyond the reveal");
+                }
+                for (int i = 0; i < 4; i++)
+                {
+                    session.Progress.BeginShot(); session.Progress.RegisterShotColor(EnemyColor.Red); session.Progress.FinishShot(true);
+                }
+                session.Tick(0);
+                player.transform.position = new Vector3(mimic.transform.position.x, -4.6f, 0);
+                var observation = new PlaytestObservation(grid, player);
+                Check(observation.At(player.transform.position.x) == (hitBehind ? 1 : 0) && ability.IsDisguised,
+                    "Read-only shot opportunities see through reveals without changing them");
+                int retractions = 0, completions = 0;
+                Action<bool> retracting = hit =>
+                {
+                    retractions++;
+                    Check(tongue.Length > mimic.HitBounds.max.y - tongue.transform.position.y,
+                        "The tongue travels entirely beyond the revealed Yellow before returning");
+                    Check(hit == hitBehind && session.Progress.ComboStreak == (hitBehind ? 5 : 0) && session.ComboBreak.Active != hitBehind,
+                        "Only a real matching hit beyond the reveal preserves the combo at retraction");
+                };
+                Action<bool> completed = hit =>
+                {
+                    completions++;
+                    Check(hit == hitBehind && session.Progress.ComboStreak == (hitBehind ? 5 : 0) && session.ComboBreak.Active != hitBehind,
+                        "Completion retains the result of the real hit or miss beyond the reveal");
+                };
+                player.ShotRetractionStarted += retracting;
+                player.ShotCompleted += completed;
+                Check(player.Fire() && !tongue.IsMagic, "Fire an ordinary reveal shot");
+                for (int i = 0; tongue.Active && i < 2000; i++) tongue.Tick(step, grid);
+                player.ShotRetractionStarted -= retracting;
+                player.ShotCompleted -= completed;
+                Check(!tongue.Active && tongue.RevealedYellow && tongue.HitRegularShield == (finish == 2) && !ability.IsDisguised &&
+                    (upper == null || !upper.GetComponent<EnemyAbilities>().IsDisguised) &&
+                    session.Progress.Score == (hitBehind ? 500 : 0) && session.Progress.Defeated == (hitBehind ? 1 : 0) &&
+                    retractions == 1 && completions == 1, "Reveals pass through and add no score or successful hit credit");
+                Check(grid.View(mimic.Id) == mimic && grid.View(host.Id) == host &&
+                    (behind == null || (grid.View(behind.Id) == null) == hitBehind), "Only the matching enemy beyond the reveal is destroyed");
+                player.transform.position = new Vector3(10, -4.6f, 0);
+                Check(player.Fire() && !tongue.RevealedYellow && !tongue.HitRegularShield,
+                    "The next accepted shot resets reveal and shield flags"); tongue.Tick(2, grid);
+                Check(session.Progress.ComboStreak == 0 && session.ComboBreak.Active,
+                    "A later genuine miss also breaks the combo");
             });
         }
 
@@ -150,18 +223,18 @@ namespace CandyCruisers.Editor
                 var colors = new List<EnemyColor>();
                 grid.MatchColorScored += colors.Add;
                 while (session.Progress.Score == 0 && tongue.Active) tongue.Tick(.001f, grid);
-                int firstWeight = hitYellow ? 6 : 5;
-                Check(session.Progress.Score == firstWeight * 100 && session.Progress.ComboStreak == 2 &&
-                    session.Progress.ActiveComboMultiplier == 3 && tongue.Active,
-                    "Destroying linked Yellow and Green scores once and immediately awards two color streaks");
-                Check(colors.Count == 2 && colors.Contains(EnemyColor.Yellow) && colors.Contains(EnemyColor.Green),
-                    "Both true destroyed colors count regardless of which end of the link was hit");
-                Check(grid.Model.ColorCount(EnemyColor.Yellow) == 0 && grid.Model.ColorCount(EnemyColor.Green) == 0,
-                    "The entire linked group is removed");
+                int firstWeight = hitYellow ? 1 : 2;
+                int firstStreak = 1;
+                Check(session.Progress.Score == firstWeight * 100 && session.Progress.ComboStreak == firstStreak &&
+                    session.Progress.ActiveComboMultiplier == firstStreak + 1 && tongue.Active,
+                    "Direct host hits score the host color; Yellow hits score Yellow alone");
+                Check(colors.Count == 1 && colors.Contains(hitYellow ? EnemyColor.Yellow : EnemyColor.Green), "Only destroyed colors advance the streak");
+                Check(grid.Model.ColorCount(EnemyColor.Yellow) == (hitYellow ? 0 : 1) && grid.Model.ColorCount(EnemyColor.Green) == (hitYellow ? 2 : 0),
+                    "Killing either real group preserves the other group");
                 tongue.Tick(2, grid);
-                Check(session.Progress.ComboStreak == (magic ? 3 : 2) &&
-                    session.Progress.Score == firstWeight * 100 + (magic ? 300 : 0),
-                    "Magic's next contact immediately uses x3; ordinary return awards no additional point");
+                Check(session.Progress.ComboStreak == firstStreak + (magic ? 1 : 0) &&
+                    session.Progress.Score == firstWeight * 100 + (magic ? (firstStreak + 1) * 100 : 0),
+                    "Magic's next contact uses the updated streak; ordinary return awards no additional point");
                 Check(magic ? grid.View(next.Id) == null : grid.View(next.Id) == next,
                     "Only the magic shot continues to the next enemy");
             });

@@ -529,6 +529,8 @@ namespace CandyCruisers.Editor
             try
             {
                 var session = sessionRoot.AddComponent<GameSession>(); session.LevelCatalog = catalog;
+                // This fixture validates gameplay art; a new session now starts in the main menu.
+                typeof(GameSession).GetProperty("State").SetValue(session, GameSession.RunState.Playing);
                 var framing = root.GetComponent<GameplayFraming>();
                 var camera = root.GetComponent<Camera>(); camera.orthographic = true;
                 framing.SetSession(session); framing.SetBackground(background);
@@ -539,12 +541,14 @@ namespace CandyCruisers.Editor
                     GameplayFraming.ForceIphoneNotchOffsetForTests = screen.x == 1206;
                     framing.SetWaveCrunch(1);
                     framing.TickBackground(5);
-                    Check(background.enabled && background.sprite == image && background.color == Color.white,
-                        "Configured image overrides black mode without tinting");
+                    Check(background.enabled && background.sprite == image && background.color.a >= .72f &&
+                        background.color.a <= 1 && background.sharedMaterial.shader.name == "CandyCruisers/StarColors",
+                        "Configured gameplay image uses the current beat tint and star material");
                     var bounds = background.bounds;
-                    Check(camera.WorldToViewportPoint(bounds.min).x <= .0001f && camera.WorldToViewportPoint(bounds.min).y <= .0001f &&
-                        camera.WorldToViewportPoint(bounds.max).x >= .9999f && camera.WorldToViewportPoint(bounds.max).y >= .9999f,
-                        "Image covers desktop and phone aspect ratios, including a custom pivot and notch offset");
+                    Check(bounds.size.x * framing.WaveCrunchScale <= 2 * PlayerMovement.HalfWidth + .0001f &&
+                        bounds.size.y * framing.WaveCrunchScale <= 2 * PlayfieldFrame.OuterTopY + .0001f &&
+                        Vector2.Distance(bounds.center, camera.transform.position) < .0001f,
+                        "Complete authored image fits inside the fixed gameplay frame with a custom pivot on desktop and phone");
                     var position = background.transform.position;
                     framing.TickBackground(5);
                     Check(background.transform.position == position && background.transform.rotation == Quaternion.identity,

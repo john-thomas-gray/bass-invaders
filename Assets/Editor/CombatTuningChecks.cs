@@ -28,14 +28,14 @@ namespace CandyCruisers.Editor
                 grid.Model.TryAdd(2, EnemyColor.Green, 2, 0);
                 Near(movement.CurrentSpeed, .06f, "Two Greens double movement");
                 movement.Tick(2 * beat);
-                Near(root.transform.position.x, .09f * beat, "Two Greens double the next tick length on count four");
+                Near(root.transform.position.x, .15f * beat, "Two Greens contribute twice the movement on each of the next two beats");
                 grid.Model.Remove(1);
                 Near(movement.CurrentSpeed, .03f, "Removing Green immediately slows fleet");
                 grid.Model.SetColor(2, EnemyColor.Blue);
                 movement.Tick(100);
-                Near(root.transform.position.x, .09f * beat, "Converting last Green immediately stops fleet");
+                Near(root.transform.position.x, .15f * beat, "Converting last Green immediately stops fleet");
                 movement.AdvanceDistance(1);
-                Near(root.transform.position.x, .09f * beat, "Direct movement also respects zero Greens");
+                Near(root.transform.position.x, .15f * beat, "Direct movement also respects zero Greens");
                 grid.Model.Remove(2);
                 movement.ResetSweep();
                 grid.ConfigureAbilities(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Red Missile.prefab"),

@@ -478,7 +478,7 @@ namespace CandyCruisers
         {
             ClearEnemies();
             var basic = Add(EnemyColor.Yellow, 0, 2);
-            var upper = Add(color == EnemyColor.Orange ? EnemyColor.Red : color, 1, 2);
+            var upper = Add(color, 1, 2);
             if (special && color != EnemyColor.Orange) { Add(color, 1, 1); Add(color, 2, 1); }
             var specialYellow = Add(EnemyColor.Yellow, 2, 6);
             Add(EnemyColor.Yellow, 1, 6); Add(EnemyColor.Yellow, 0, 6);
@@ -549,7 +549,7 @@ namespace CandyCruisers
             {
                 var ability = enemy.GetComponent<EnemyAbilities>();
                 if (Selected == Animation.StartGame || enemy == activeGreen || enemy.Color == EnemyColor.Blue ||
-                    Selected == Animation.YellowImitation && (ability.IsTransforming || ability.IsDisguised))
+                    Selected == Animation.YellowImitation && (ability.IsTransforming || Grid.Model.IsAttached(enemy.Id)))
                 { ability.Suspended = false; continue; }
                 ability.Suspended = true;
                 enemy.GetComponent<EnemyPresentation>().Tick(Time.deltaTime, enemy.Color, 0);

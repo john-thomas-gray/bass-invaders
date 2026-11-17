@@ -185,6 +185,9 @@ namespace CandyCruisers.Editor
                     var ability = yellow.GetComponent<EnemyAbilities>();
                     Check(ability.BeginImitation(red), "Last Yellow starts transformation");
                     ability.Tick(EnemyAbilities.DefaultImitationSeconds);
+                    Check(deaths == 0 && player.Lives == PlayerMovement.MaxLives && player.Alive,
+                        "Last Yellow attachment leaves the player unharmed");
+                    return;
                 }
                 else
                 {
@@ -197,7 +200,7 @@ namespace CandyCruisers.Editor
                 }
                 Check(deaths == 1 && player.Lives == PlayerMovement.MaxLives - 1 && !player.Alive &&
                     !player.FatallyDefeated && !player.Invulnerable,
-                    "Missile and last-Yellow penalties trigger recoverable death cues");
+                    "Missiles trigger recoverable death cues");
                 Check(!player.Hit() && deaths == 1, "Repeated hit cannot duplicate death animation");
                 float takeoff = PlayerLifeIcons.ApexSeconds + .1f;
                 player.TickSurvival(takeoff);

@@ -2,7 +2,7 @@
 
 ## Recoverable Death And Forcefield Return
 
-Missile hits and the last-Yellow transformation penalty use the same replaceable
+Missile hits use the same replaceable
 player-death cue as fatal contact. Each run starts with the active player plus
 two spare lives. Two miniature slimes replace the numeric Lives readout. Their
 color follows the player and their art copies the actual player sprite pieces
@@ -44,8 +44,8 @@ retain their existing return speed, and stun ends when the tongue returns or is 
 Orange unlocks at level 9 and never receives a special tier. Each eligible new
 wave guarantees exactly one Orange. Later row slots and Purple summons each
 have a 1-in-75 chance while no Orange is present, subject to color-clear locks.
-Only one actual Orange may spawn on screen; disguised special Yellows remain
-Yellow and do not consume that slot. An Orange-only override starts with one
+Only one actual Orange may spawn on screen. All mimics retain Yellow identity
+until a regular mimic permanently converts; copied Orange appearance alone does not consume an Orange slot. An Orange-only override starts with one
 enemy and leaves subsequent slots empty unless their rare Orange roll succeeds.
 The older retreat-explosion behavior remains as a defensive fallback for custom
 fleets, but normal spawning can no longer produce two Oranges.
@@ -55,7 +55,7 @@ cooldown (6-12 seconds initially, with the existing level-based maximum reductio
 it flashes, casts for .35 seconds, then swaps positions with an eligible singleton.
 The target must have no same-color or active imitation-chain connections, and
 its color must match a different enemy next to the Orange's original position.
-Eligibility uses true colors, not special Yellow disguises. A missing eligible
+Eligibility uses true colors; mimics remain Yellow until permanent conversion. A missing eligible
 target simply consumes that attempt and waits for the next cooldown.
 
 Spawn and swap destinations cannot put two Oranges in orthogonally adjacent
@@ -69,8 +69,7 @@ Retreat is the exception: if it brings Oranges together, their entire connected
 Orange group immediately explodes. Each awards five times the current level's
 base enemy points. Defeat progression, last-of-color rewards and fleet bonuses
 still apply; shot combos do not multiply these environmental points or receive
-hit credit. Orange explosions never create a special tier. Ordinary Yellow
-cannot copy Orange, but special Yellow can wear an Orange disguise normally.
+hit credit. Orange explosions never create a special tier. Both ordinary and special Yellow can attach to Orange and gain its ability.
 
 ### Quiet Player Color Assistance
 
@@ -91,7 +90,7 @@ eligible set. Formation changes do not replace an already-ready color.
 - Non-Blue enemies immediately above a special Blue remain blocked even when
   there is no full barrier. One exposed enemy can keep its color eligible.
   Ordinary Blues do not create barriers. True logical colors determine
-  eligibility, and a transforming Yellow cannot make Yellow eligible.
+  eligibility. A Yellow remains eligible during copying windup and while mimicking.
 - For each eligible color, every on-screen enemy of that color adds `row + 1`
   to its weight, where the top row is zero. More enemies increase a color's
   odds, and lower rows contribute more. Eligibility and population are separate:
@@ -119,7 +118,8 @@ Empty/repeated hits, shield absorption, and disabling enemies award nothing.
 
 Each enemy awards `(100 + 10 * (level - 1)) * multiplier` points. Ordinary shots
 use shortest connection depth: the hit enemy is 1, direct neighbors 2, and each
-further branch adds one, including ordinary Yellow attachment links.
+further branch adds one. A host-colored hit on a regular mimic enters its host
+group; Yellow hits stay in the Yellow group. Rainbow hits on regular mimics enter both.
 Only chains of three or more earn multipliers. Chains of one or two award base
 points per enemy and use staggered unnumbered singleton pops for either shot type.
 Magic shots add the preceding peak multiplier to each enemy's local connection
@@ -139,12 +139,17 @@ Starting at x1, a Red hit scores at x1 and raises the combo to x2; a Green hit
 then scores at x2 and raises it to x3. Another disconnected Red group scores at
 x3 but cannot award Red again in that shot. A new shot can earn Red again.
 
-Basic Yellow's active attachment links count both Yellow and the linked group's
-true color for ordinary and magic shots. All colors in that contact score at the
-pre-contact multiplier; the next contact benefits from every new color earned.
-Special Yellow disguises still count only as Yellow. A hit need not eliminate
-every on-screen enemy of its color to advance the combo. Environmental Orange
-bursts, shield absorption and disguise reveals award no streak points.
+A host-colored hit on a regular mimic scores that mimic and the real host group.
+A Yellow hit scores only the Yellow group. Rainbow hits on regular mimics score
+both groups; rainbow hits on special mimics score only their Yellow group.
+All Yellows, including special mimics, count as Yellow for destroyed-color streaks
+until a regular mimic converts permanently. A host-colored shot reveals a special
+Yellow and passes through it, continuing to search for a matching enemy. Revealing
+alone adds no score, kills or streak point and does not preserve the combo. If the
+shot returns without destroying a matching enemy, it breaks the combo even if it
+revealed one or more Yellows or subsequently hit a regular shield. A real matching
+hit beyond the revealed Yellow scores normally and preserves the combo.
+Special-shield deflections retain their combo penalty.
 
 Returning or canceling a successful shot adds no extra point. A shot that
 defeats no enemies resets the streak when retraction begins or it is canceled.
@@ -211,60 +216,70 @@ is also eligible. Summons cannot extend beyond the grid. An occupied bottom row
 blocks further descent; game over requires its enemy body to touch the player. Color locks,
 level unlocks, overrides, cooldowns and rift presentation are unchanged.
 
-## Yellow: Linked Transformation
+## Yellow: Mimics, Hosts and Yellow Groups
 
-Ordinary Yellow randomly chooses an occupied orthogonal non-Yellow neighbor and attaches
-to it for two soundtrack beats. During this transition it remains logically Yellow:
-Yellow shots can hit it, Yellow counts include it, and it does not yet receive
-the destination type's ordinary ability.
+A mimic is a Yellow currently copying a color. Its host is the real enemy whose
+color it copies. The host group contains real enemies of that color connected
+directly or through active mimics copying that color;
+the mimic group contains connected Yellows, including mimics copying other colors.
+Copying changes presentation and abilities while logical identity stays Yellow.
+Only permanent conversion removes that Yellow identity.
+Copying never makes Yellow unavailable. Automatic player-color refresh preserves
+a held Yellow while any true Yellow remains, including the last Yellow's windup.
+Normal explicit shot rerolls still use the ordinary color-selection rules.
 
-New player-color selections exclude Yellow when every remaining Yellow is
-transforming. An already-Yellow player keeps that color until the usual reroll
-or completion penalty. Any untransformed Yellow, including a newly spawned one
-or a canceled transformation, makes Yellow selectable again. Next-fleet color
-selection still uses the planned incoming enemies.
+Regular Yellow keeps its two-soundtrack-beat windup. It gains the copied color's
+regular ability even when its host is special. Special Yellow copies immediately
+and gains the color's special ability even when its host is regular.
+Adjacent plain Yellows are excluded from both target pools. Adjacent active
+mimics are valid targets: the Yellow copies their copied color and refers to the
+underlying real host. Copying itself gives no score, clear bar or player damage.
 
-Its rebalanced cooldown starts at 1.5-4.5 seconds with the shared maximum
-reduction below. A failed attempt with no eligible neighbor retries
-after another cooldown. The tendril forms a two-way hit link: a matching hit on
-the Yellow clears both its Yellow group and the destination's connected color
-group; a matching hit on that group also clears attached Yellows. Linked clears
-are discovered before removal so multiple attachments and bridges resolve once,
-with each defeated enemy scored once. Clearing the last actual Yellow by a hit
-earns the Yellow bar and the usual magic reward, regardless of which side was hit.
+A mimic supplies a promotion member to its host group when that group already
+contains at least two real hosts, including hosts joined only through the mimic.
+For example, `gb/by` promotes both Blues and colors three quarters of the regular
+Yellow Blue, regardless of which Blue it chose. This promotes the hosts while keeping the
+Yellow's tier independent. Three connected Yellows promote their own group,
+including Yellows that currently display different copied colors. Removing or
+detaching a mimic reevaluates surviving hosts and removes unsupported special
+status, upgraded shielding and Green tempo boosts. Only mimics with a live path
+to their real host through the copied color can supply promotion support.
+Revealing a bridge mimic detaches unsupported copying chains before hosts are
+reevaluated. Thus `yyyrr` returns to two regular Reds after revealing the third
+Yellow, while `yyyrrr` retains its three special real Reds.
 
-On completion, the Yellow permanently adopts its target's color and ordinary
-ability. Conversion is not a kill: it grants no score, magic or Yellow clear bar,
-and leaves Yellow eligible to spawn. If this was the last Yellow and the player's
-selected shot color is Yellow, the player takes a normal hit (respecting existing
-invulnerability), canceling an active shot. Cosmetic magic color flashes do not
-change that selected-color check. A non-Yellow player is not hit.
+| Hit | Regular mimic | Special mimic |
+| --- | --- | --- |
+| Yellow | Destroy the mimic and its yellow group; preserve hosts | Destroy the mimic and its yellow group; preserve hosts |
+| Host color | Destroy this mimic and its real host group; preserve other Yellows | Flash, reveal as Yellow and detach; tongue passes through and preserves both groups |
+| Rainbow magic | Destroy both the host group and yellow group | Counts as Yellow: destroy the yellow group and preserve hosts |
 
-The logical timer lives in `EnemyAbilities`, not in an animation callback. The
-presentation remains replaceable. If the target disappears outside a combat
-clear or changes type mid-transition, the attachment cancels and the source
-stays Yellow. After a completed conversion, the former target no longer has a
-special link to the converted enemy.
+A special Blue mimic is the host-color-hit exception: its shield is Yellow.
+Yellow and rainbow shots bypass that shield and destroy the yellow group. Blue
+and every other ordinary non-Yellow shot receive the normal special-shield shock,
+stun and returning-tongue penalty. The mimic stays attached after a shield hit.
+Yellow and Blue special shield cells use one shared square perimeter, removing
+internal borders across color boundaries while retaining each segment's own
+friendly shot color.
+Other special mimics can be killed only by Yellow or rainbow shots; unrelated
+ordinary colors pass through. Revealing uses the existing flash animation.
 
-## Special Yellow: Disguise
+### Coverage and Permanent Conversion
 
-Tier-two Yellow visually imitates a non-Yellow orthogonal neighbor over the same
-two-beat transition, without a tendril or combat link. It copies the sprite,
-scale and color, not the enemy's abilities or logical identity. It remains Yellow
-for counts, player-color availability, connected clears, promotion and rewards.
-Two real Reds and a disguised Yellow therefore remain a two-Red group, not a
-special Red group. The disguise survives the copied enemy's removal or conversion.
-
-Any non-Yellow ordinary tongue can hit the disguised enemy, even during its
-transition. The shot passes through and reveals it without killing, scoring or stunning:
-the enemy flashes white/Yellow for half a second, restores its own Yellow
-triangle, and starts a fresh cooldown. The tongue keeps extending and can reveal
-additional disguises or hit enemies behind it, even within the same frame.
-Yellow and magic shots kill its actual
-Yellow group and can earn the Yellow bar without clearing the copied group.
-Disguising the last Yellow never triggers the ordinary transformation penalty.
-If an ordinary Yellow promotes while transforming, its link is detached and the
-remaining visual transition finishes as a disguise rather than a conversion.
+A regular mimic's half facing each adjacent enemy showing the copied color is
+colored accordingly. Halves are combined as a union: one side covers half,
+perpendicular sides cover three quarters, and opposite horizontal or vertical
+sides cover the entire sprite. All adjacent enemies showing the copied color
+contribute, regardless of which host was selected or whether the real hosts
+touch directly. Thus `gb/ry/gb` converts the middle Yellow completely to Blue.
+Full coverage permanently converts a regular
+mimic into a real enemy of that color. It then follows normal matching, promotion
+and ability rules and is no longer a member of its old Yellow group. Special
+mimics are fully colored immediately but never convert permanently from coverage.
+Coverage is reevaluated after movement and adjacency changes. Losing a host or
+its copying connection detaches surviving mimics rather than introducing extra
+kills into either group. Death effects keep a stable material independent of the
+mimic's temporary split-color material.
 
 ## Green: Count-Based Movement
 
@@ -417,8 +432,8 @@ is disabled during fatal defeat; this retained counter behavior was left unchang
 Each match records shortest connection distance from the struck enemy before
 removing anything. On ordinary shots the first enemy has no numeral, its
 neighbors show `2`, their next neighbors show `3`, and so on. Siblings share a
-number and burst together. Active Yellow tendrils count as links, and each
-digit uses the dying enemy's actual color. Magic shots display a continuous
+number and burst together. Mimic links are traversed only for the applicable
+shot rule above, and each digit uses the dying enemy's true color. Magic shots display a continuous
 per-enemy count across all groups: blank, `2`, `3`, `4`, and so on. Local branch
 depth still controls each group's animation timing independently of its score
 multiplier, so later hits do not acquire long delays merely from a large count.
@@ -442,8 +457,7 @@ Tier-two ships use the shared squid sprite assigned on `EnemyRowSpawner`'s
 optional `specialSprite` field.
 Orange always uses that special sprite, including in menu previews, while retaining
 its existing single-tier abilities, cooldowns and hitbox; it does not need promotion.
-Special Purple adds forward-row summons, including the bottom row. Special Yellow uses a visual-only
-disguise instead of ordinary linked transformation, as detailed above.
+Special Purple adds forward-row summons, including the bottom row. Special Yellow fully copies its host color and ability and reverts on host death, as detailed above.
 
 An active tier-two Blue shields its whole connected Blue group with a rigid
 outline along the exposed cell edges, including concave boundaries. Internal
@@ -583,7 +597,7 @@ transformations of existing enemies.
 
 `ProgressionChecks` extends the full editor suite with thresholds, scoring,
 unlock-gated rows and summons, independent Green steps and edge contact,
-timed Yellow conversion, linked clears and ability adoption on completion, fleet-wide Purple
+timed Yellow attachment, host-dependent deaths, special reversion and ability adoption, fleet-wide Purple
 selection, and full-grid safety. The Play mode suite checks real-hit scoring,
 restart reset, and crossing an unlock threshold through a real clear.
 

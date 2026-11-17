@@ -58,7 +58,7 @@ namespace CandyCruisers.Editor
                 Check(grid.SelectablePlayerColors().Contains(EnemyColor.Red), "A gap above the Blue is not directly behind it");
                 var yellow = Add(grid, EnemyColor.Yellow, 3, 0);
                 Check(grid.Model.BeginImitation(yellow.Id, grid.Model.At(4, 0).Id), "Yellow starts transforming");
-                Check(!grid.SelectablePlayerColors().Contains(EnemyColor.Yellow), "Existing transforming-Yellow exclusion is preserved");
+                Check(grid.SelectablePlayerColors().Contains(EnemyColor.Yellow), "Yellow remains selectable during copying windup");
             });
 
             SpecialEnemyChecks.Fixture((grid, player, tongue) =>
@@ -274,8 +274,8 @@ namespace CandyCruisers.Editor
                 var target = Add(grid, EnemyColor.Red, 2, 6);
                 Add(grid, EnemyColor.Yellow, 3, 0);
                 Check(grid.Model.BeginImitation(yellow.Id, target.Id), "Exposed Yellow begins transforming");
-                Check(!grid.SelectablePlayerColors().Contains(EnemyColor.Yellow),
-                    "Hidden ready Yellows do not make an exposed transforming Yellow selectable");
+                Check(grid.SelectablePlayerColors().Contains(EnemyColor.Yellow),
+                    "An exposed transforming Yellow remains selectable even when other Yellows are hidden");
             });
         }
 

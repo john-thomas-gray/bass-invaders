@@ -125,15 +125,15 @@ namespace CandyCruisers.Editor
                 Check(yellow.Color == EnemyColor.Yellow && yellow.GetComponent<EnemyAbilities>().IsTransforming,
                     "Yellow remains matchable during transformation");
                 yellow.GetComponent<EnemyAbilities>().Tick(EnemyAbilities.DefaultImitationSeconds);
-                Check(yellow.Color == EnemyColor.Blue && grid.Model.ColorCount(EnemyColor.Yellow) == 0 &&
-                    grid.Model.ColorCount(EnemyColor.Blue) == 2, "Ordinary Yellow permanently changes model color");
+                Check(yellow.Color == EnemyColor.Yellow && grid.Model.ColorCount(EnemyColor.Yellow) == 1 &&
+                    grid.Model.ColorCount(EnemyColor.Blue) == 1, "Ordinary Yellow keeps Yellow identity while copying its host");
                 var copiedBlue = yellow.GetComponent<EnemyAbilities>();
                 Check(!copiedBlue.ShieldActive && copiedBlue.CooldownRemaining > 0, "Imitation becomes an ordinary Blue with an initial cooldown");
                 copiedBlue.Tick(copiedBlue.CooldownRemaining + .35f);
                 Check(copiedBlue.ShieldActive, "Copied Blue powers up after its cooldown");
-                grid.Unregister(blue); UnityEngine.Object.DestroyImmediate(blue.gameObject);
-                yellow.GetComponent<EnemyAbilities>().Tick(1);
-                Check(yellow.Color == EnemyColor.Blue, "Neighbor death does not undo ordinary imitation");
+                int yellowId = yellow.Id;
+                grid.ClearMatchingChain(blue.Id, EnemyColor.Blue);
+                Check(grid.View(yellowId) == yellow && !grid.Model.IsAttached(yellowId), "Host death detaches its surviving Yellow");
                 Empty(grid);
                 yellow = Add(grid, EnemyColor.Yellow, 2, 0);
                 Add(grid, EnemyColor.Yellow, 3, 0);

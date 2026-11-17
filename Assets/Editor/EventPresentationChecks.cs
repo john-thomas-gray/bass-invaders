@@ -69,7 +69,9 @@ namespace CandyCruisers.Editor
                 ProgressionChecks.Add(grid, EnemyColor.Yellow, 4, 1);
                 grid.RefreshSpecials();
                 Check(copy.BeginImitation(blue) && played.Contains(SoundEffect.YellowHide), "Special Yellow hide cue");
-                Check(copy.RevealDisguise(EnemyColor.Red) && played.Contains(SoundEffect.YellowReveal), "Special Yellow reveal cue");
+                grid.ClearMatchingChain(blue.Id, EnemyColor.Blue);
+                Check(yellow.Color == EnemyColor.Yellow && played.Contains(SoundEffect.YellowReveal),
+                    "Host death emits the special Yellow reversion cue");
                 var purple = ProgressionChecks.Add(grid, EnemyColor.Purple, 0, 2);
                 Check(grid.GetComponent<EnemyRowSpawner>().TrySummon(purple) != null && played.Contains(SoundEffect.PurpleWarp), "Purple warp cue");
                 player.Hit();

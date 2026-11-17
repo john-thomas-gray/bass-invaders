@@ -20,6 +20,8 @@ namespace CandyCruisers
         public int Tier => IsSpecial ? 2 : 1;
         internal void Promote() { if (Color != EnemyColor.Orange) IsSpecial = true; }
 
+        internal void Demote() => IsSpecial = false;
+
         public void Configure(EnemyColor newColor, int newColumn, int newRow)
         {
             if (owner != null) throw new System.InvalidOperationException("Use EnemyGrid to modify registered enemies.");
@@ -34,6 +36,12 @@ namespace CandyCruisers
             occupant = grid != null ? grid.Model.Find(Id) : null;
         }
         internal void SetCell(int newColumn, int newRow) { column = newColumn; row = newRow; }
+        internal void SetImitationColor(EnemyColor newColor)
+        {
+            bool special = IsSpecial;
+            SetColor(newColor);
+            IsSpecial = special;
+        }
         internal void SetColor(EnemyColor newColor)
         {
             if (color != newColor) IsSpecial = false;

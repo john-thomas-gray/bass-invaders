@@ -63,7 +63,7 @@ namespace CandyCruisers
                     cue.duration = kind == Kind.Fire ? .16f : .22f;
                     cue.ring = new GameObject("Placeholder pulse", typeof(LineRenderer)).GetComponent<LineRenderer>();
                     cue.ring.transform.SetParent(cue.transform, false);
-                    cue.ring.sharedMaterial = source.sharedMaterial;
+                    cue.ring.sharedMaterial = EnemyPresentation.StableEffectMaterial(source);
                     cue.ring.useWorldSpace = false;
                     cue.ring.loop = true;
                     cue.ring.positionCount = 24;
